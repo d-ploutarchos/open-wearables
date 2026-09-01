@@ -12,7 +12,7 @@ from typing import Any
 from celery import shared_task
 
 from app.database import SessionLocal
-from app.services import developer_service
+from app.services.developer_service import developer_service
 from app.services.outgoing_webhooks import svix as svix_service
 
 logger = getLogger(__name__)

@@ -276,6 +276,7 @@ Every payload envelope has `type` (the event name as a string) and `data`.
   "type": "workout.created",
   "data": {
     "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "canonical_id": null,
     "user_id": "550e8400-e29b-41d4-a716-446655440000",
     "type": "running",
     "name": "Morning Run",
@@ -293,13 +294,15 @@ Every payload envelope has `type` (the event name as a string) and `data`.
     "max_heart_rate_bpm": 182,
     "avg_pace_sec_per_km": 353,
     "elevation_gain_meters": 95.0,
-    "exercises": null
+    "exercises": null,
+    "sources": null,
+    "provenance": null
   }
 }
 ```
 
 <Note>
-  Fields like `calories_kcal`, `distance_meters`, and heart-rate fields are `null` when the provider did not report them. Hevy strength workouts include the complete exercise, set, repetition, load, RPE, distance, and duration data in `exercises`, making the event self-contained for coaching agents.
+  Fields like `calories_kcal`, `distance_meters`, and heart-rate fields are `null` when the provider did not report them. Hevy and Apple Health strength records are correlated into one physical workout before delivery: `id` and `canonical_id` identify that merged workout, `exercises` contains Hevy's exercise/set detail, Apple supplies available calories and heart-rate aggregates, `sources` identifies every contributing raw record, and `provenance` names the provider selected for each merged field. Delivery uses the canonical ID as its idempotency key, so the two provider arrivals produce one coaching event.
 </Note>
 
 ### `sleep.created`

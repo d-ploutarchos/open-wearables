@@ -4,74 +4,55 @@ from uuid import UUID
 from celery import shared_task
 
 from app.database import SessionLocal
-from app.models import DataSource, EventRecord, WorkoutDetails
-from app.schemas.enums import ProviderName
-from app.schemas.model_crud.activities import EventRecordDetailCreate
-from app.services.event_record_service import event_record_service
+from app.services.canonical_workout_service import canonical_workout_service
+from app.services.outgoing_webhooks.events import on_workout_created
 from app.utils.structured_logging import log_structured
 
 logger = getLogger(__name__)
 
 
-def _overlap_ratio(left: EventRecord, right: EventRecord) -> float:
-    overlap = max(
-        0.0,
-        (min(left.end_datetime, right.end_datetime) - max(left.start_datetime, right.start_datetime)).total_seconds(),
-    )
-    shortest = min(
-        max(0.0, (left.end_datetime - left.start_datetime).total_seconds()),
-        max(0.0, (right.end_datetime - right.start_datetime).total_seconds()),
-    )
-    return overlap / shortest if shortest > 0 else 0.0
-
-
 @shared_task
-def emit_apple_strength_workout_after_dedupe(record_id: str) -> dict[str, str | bool]:
-    """Emit Apple strength only when no detailed Hevy copy represents the session."""
+def emit_canonical_strength_workout(record_id: str) -> dict[str, str | bool]:
+    """Correlate provider records and emit one self-contained coaching event."""
     with SessionLocal() as db:
-        record = db.get(EventRecord, UUID(record_id))
-        if record is None or record.data_source_id is None:
-            return {"emitted": False, "reason": "record_not_found"}
-        data_source = db.get(DataSource, record.data_source_id)
-        detail = db.get(WorkoutDetails, record.id)
-        if data_source is None or detail is None:
-            return {"emitted": False, "reason": "detail_not_found"}
+        canonical = canonical_workout_service.ensure_for_record(db, UUID(record_id))
+        if canonical is None:
+            return {"emitted": False, "reason": "record_not_eligible"}
+        response = canonical_workout_service.get_response(db, canonical.id)
+        if response is None:
+            return {"emitted": False, "reason": "canonical_workout_incomplete"}
 
-        hevy_records = (
-            db.query(EventRecord)
-            .join(DataSource, EventRecord.data_source_id == DataSource.id)
-            .filter(
-                DataSource.user_id == data_source.user_id,
-                DataSource.provider == ProviderName.HEVY,
-                EventRecord.category == "workout",
-                EventRecord.start_datetime < record.end_datetime,
-                EventRecord.end_datetime > record.start_datetime,
-            )
-            .all()
+        primary_provider = response.provenance.get("name", "canonical")
+        primary_source = next((source for source in response.sources if source.provider == primary_provider), None)
+        on_workout_created(
+            record_id=response.id,
+            canonical_id=response.id,
+            user_id=response.user_id,
+            provider=primary_provider,
+            device=primary_source.device if primary_source else None,
+            workout_type=response.type,
+            workout_name=response.name,
+            start_time=response.start_time.isoformat(),
+            end_time=response.end_time.isoformat(),
+            zone_offset=None,
+            duration_seconds=response.duration_seconds,
+            calories_kcal=response.calories_kcal,
+            distance_meters=response.distance_meters,
+            avg_heart_rate_bpm=response.avg_heart_rate_bpm,
+            max_heart_rate_bpm=response.max_heart_rate_bpm,
+            exercises=response.exercises,
+            sources=[source.model_dump(mode="json") for source in response.sources],
+            provenance=response.provenance,
         )
-        matched = next((candidate for candidate in hevy_records if _overlap_ratio(record, candidate) >= 0.5), None)
-        if matched is not None:
-            log_structured(
-                logger,
-                "info",
-                "Suppressed duplicate Apple strength workout webhook",
-                provider="apple",
-                action="workout_webhook_deduplicated",
-                record_id=str(record.id),
-                canonical_record_id=str(matched.id),
-                user_id=str(data_source.user_id),
-            )
-            return {"emitted": False, "reason": "overlapping_hevy_workout"}
-
-        schema = EventRecordDetailCreate(
-            record_id=detail.record_id,
-            heart_rate_max=detail.heart_rate_max,
-            heart_rate_avg=detail.heart_rate_avg,
-            energy_burned=detail.energy_burned,
-            distance=detail.distance,
-            average_speed=detail.average_speed,
-            total_elevation_gain=detail.total_elevation_gain,
-            segments=detail.segments,
+        log_structured(
+            logger,
+            "info",
+            "Canonical strength workout event emitted",
+            provider="canonical",
+            action="canonical_workout_emitted",
+            record_id=record_id,
+            canonical_workout_id=str(response.id),
+            user_id=str(response.user_id),
+            source_count=len(response.sources),
         )
-        event_record_service._emit_workout_webhook(record, data_source, schema)
-        return {"emitted": True, "reason": "no_overlapping_hevy_workout"}
+        return {"emitted": True, "canonical_workout_id": str(response.id)}

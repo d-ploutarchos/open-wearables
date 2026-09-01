@@ -40,6 +40,7 @@ mcp = FastMCP(
     - get_workout_events: Get workout/exercise data for a user over a specified time period
     - list_strength_exercises: Resolve exact strength exercise identities and variants
     - get_strength_progress: Analyze load, volume, repetitions, and estimated 1RM over time
+    - get_canonical_workout: Read one physical workout merged across structural and physiological sources
     - get_timeseries: Get granular time-series samples (e.g. weight, SpO2, HRV, intraday heart rate)
     - get_menstrual_cycles: Get menstrual cycle records (cycle day, phase, period and cycle lengths)
 

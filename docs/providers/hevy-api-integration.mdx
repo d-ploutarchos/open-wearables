@@ -41,6 +41,20 @@ Open Wearables authenticates the notification, responds immediately, and fetches
 
 Periodic reconciliation uses Hevy's workout-events endpoint with a five-minute overlap to recover missed notifications, edits, and deletions.
 
+## Canonical workout fusion
+
+Completed strength sessions are correlated across Hevy and Apple Health when their time windows overlap by at least 50 percent. Open Wearables persists the relationship rather than making agents rediscover it on every request.
+
+The canonical workout prefers Hevy for the workout name, duration, exercises, sets, repetitions, load, and RPE. It prefers Apple Health for calories, distance, and heart-rate aggregates. Raw source records remain unchanged and the response includes both source IDs plus field-level provenance.
+
+```bash
+curl --get \
+  --url "https://api.example.com/api/v1/users/550e8400-e29b-41d4-a716-446655440000/canonical-workouts/7e845346-0748-4414-9a72-01e1d720fb64" \
+  --header "X-Open-Wearables-API-Key: ow_agent_api_key"
+```
+
+For Hevy and Apple strength sessions, `workout.created` is emitted after a short correlation window and uses the canonical workout ID. The payload is self-contained and includes merged metrics, exercises, `sources`, and `provenance`. Multiple provider arrivals therefore converge on one idempotent coaching event.
+
 ## Agent queries
 
 The REST API exposes stable exercise identities and set-derived history:
@@ -52,4 +66,4 @@ curl --get \
   --data-urlencode "search=squat"
 ```
 
-The MCP server provides `list_strength_exercises` and `get_strength_progress`. Exercise variants remain separate unless a caller explicitly selects the intended stable exercise ID. Estimated one-repetition maximum uses the Epley formula and is labelled as an estimate.
+The MCP server provides `get_canonical_workout`, `list_strength_exercises`, and `get_strength_progress`. Exercise variants remain separate unless a caller explicitly selects the intended stable exercise ID. Estimated one-repetition maximum uses the Epley formula and is labelled as an estimate.

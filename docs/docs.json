@@ -251,7 +251,8 @@
             "group": "Strength Training",
             "pages": [
               "GET /api/v1/users/{user_id}/strength/exercises",
-              "GET /api/v1/users/{user_id}/strength/exercises/{exercise_id}/history"
+              "GET /api/v1/users/{user_id}/strength/exercises/{exercise_id}/history",
+              "GET /api/v1/users/{user_id}/canonical-workouts/{canonical_workout_id}"
             ]
           },
           {

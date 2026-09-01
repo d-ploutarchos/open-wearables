@@ -1,6 +1,8 @@
 from .api_key import ApiKey
 from .application import Application
 from .archival_setting import ArchivalSetting
+from .canonical_workout import CanonicalWorkout
+from .canonical_workout_source import CanonicalWorkoutSource
 from .data_point_series import DataPointSeries
 from .data_point_series_archive import DataPointSeriesArchive
 from .data_source import DataSource
@@ -36,6 +38,8 @@ __all__ = [
     "ApiKey",
     "Application",
     "ArchivalSetting",
+    "CanonicalWorkout",
+    "CanonicalWorkoutSource",
     "Developer",
     "DataSource",
     "DataPointSeriesArchive",

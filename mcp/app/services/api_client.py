@@ -257,6 +257,12 @@ class OpenWearablesClient:
             params=params,
         )
 
+    async def get_canonical_workout(self, user_id: str, canonical_workout_id: str) -> dict[str, Any]:
+        return await self._request(
+            "GET",
+            f"/api/v1/users/{user_id}/canonical-workouts/{canonical_workout_id}",
+        )
+
 
 # Singleton instance
 client = OpenWearablesClient()

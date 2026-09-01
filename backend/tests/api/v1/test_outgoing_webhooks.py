@@ -124,6 +124,41 @@ class TestWebhookEmit:
         assert payload["data"]["exercises"] == exercises
 
     @patch("app.integrations.celery.tasks.emit_webhook_event_task.emit_webhook_event")
+    def test_on_canonical_workout_includes_sources_and_provenance(self, mock_task: MagicMock) -> None:
+        canonical_id = uuid4()
+        sources = [
+            {
+                "event_record_id": str(uuid4()),
+                "provider": "hevy",
+                "device": "Hevy",
+                "start_time": "2026-09-01T16:00:00Z",
+                "end_time": "2026-09-01T17:00:00Z",
+            }
+        ]
+        provenance = {"name": "hevy", "exercises": "hevy", "calories_kcal": "apple"}
+        on_workout_created(
+            record_id=canonical_id,
+            canonical_id=canonical_id,
+            user_id=uuid4(),
+            provider="hevy",
+            device="Hevy",
+            workout_type="strength_training",
+            workout_name="Lower Body",
+            start_time="2026-09-01T16:00:00Z",
+            end_time="2026-09-01T17:00:00Z",
+            zone_offset=None,
+            duration_seconds=3600,
+            sources=sources,
+            provenance=provenance,
+        )
+
+        payload = mock_task.delay.call_args.args[1]
+        assert payload["data"]["id"] == str(canonical_id)
+        assert payload["data"]["canonical_id"] == str(canonical_id)
+        assert payload["data"]["sources"] == sources
+        assert payload["data"]["provenance"] == provenance
+
+    @patch("app.integrations.celery.tasks.emit_webhook_event_task.emit_webhook_event")
     def test_on_sleep_created_dispatches(self, mock_task: MagicMock) -> None:
         uid = uuid4()
         rid = uuid4()

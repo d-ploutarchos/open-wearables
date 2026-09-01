@@ -3,6 +3,7 @@ from decimal import Decimal
 from logging import Logger, getLogger
 from uuid import UUID, uuid4
 
+from celery import current_app as celery_app
 from sqlalchemy import event as sa_event
 from sqlalchemy.orm import Query
 
@@ -57,6 +58,8 @@ from app.services.scores.sleep_service import sleep_score_service
 from app.services.services import AppService
 from app.utils.exceptions import handle_exceptions
 from app.utils.pagination import encode_cursor
+
+logger = getLogger(__name__)
 
 
 class EventRecordService(
@@ -600,12 +603,20 @@ class EventRecordService(
                     pregnancy_snapshot=mcd.pregnancy_snapshot if mcd else None,
                 )
             case "workout":
-                if provider == "apple" and record.type == "strength_training":
-                    from app.integrations.celery.tasks.canonical_workout_task import (
-                        emit_apple_strength_workout_after_dedupe,
-                    )
-
-                    emit_apple_strength_workout_after_dedupe.apply_async(args=[str(record.id)], countdown=15)
+                if provider in {"apple", "hevy"} and record.type == "strength_training":
+                    countdown = 5 if provider == "hevy" else 15
+                    try:
+                        celery_app.send_task(
+                            "app.integrations.celery.tasks.canonical_workout_task.emit_canonical_strength_workout",
+                            args=[str(record.id)],
+                            countdown=countdown,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Could not enqueue canonical strength workout event %s",
+                            record.id,
+                            exc_info=True,
+                        )
                     return
                 EventRecordService._emit_workout_webhook(record, data_source, detail)
 

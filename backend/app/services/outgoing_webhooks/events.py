@@ -51,6 +51,8 @@ def _dispatch(
     if not svix_service.is_enabled():
         return
     try:
+        # Imported lazily to avoid a cycle through the Celery task package,
+        # whose provider tasks also emit these webhook events.
         from app.integrations.celery.tasks.emit_webhook_event_task import emit_webhook_event
 
         emit_webhook_event.delay(event_type, payload, channels=channels, idempotency_key=idempotency_key)
@@ -77,6 +79,9 @@ def on_workout_created(
     elevation_gain_meters: float | None = None,
     avg_pace_sec_per_km: int | None = None,
     exercises: list[dict[str, Any]] | None = None,
+    canonical_id: UUID | None = None,
+    sources: list[dict[str, Any]] | None = None,
+    provenance: dict[str, str] | None = None,
 ) -> None:
     _dispatch(
         WebhookEventType.WORKOUT_CREATED,
@@ -84,6 +89,7 @@ def on_workout_created(
             "type": WebhookEventType.WORKOUT_CREATED,
             "data": {
                 "id": str(record_id),
+                "canonical_id": str(canonical_id) if canonical_id else None,
                 "user_id": str(user_id),
                 "type": workout_type,
                 "name": workout_name,
@@ -99,6 +105,8 @@ def on_workout_created(
                 "avg_pace_sec_per_km": avg_pace_sec_per_km,
                 "elevation_gain_meters": elevation_gain_meters,
                 "exercises": exercises,
+                "sources": sources,
+                "provenance": provenance,
             },
         },
         idempotency_key=f"workout.created.{record_id}",

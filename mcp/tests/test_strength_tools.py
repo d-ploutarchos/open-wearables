@@ -1,9 +1,30 @@
 from pytest_httpx import HTTPXMock
 
-from app.tools.strength import get_strength_progress, list_strength_exercises
+from app.tools.strength import get_canonical_workout, get_strength_progress, list_strength_exercises
 
 USER_ID = "00000000-0000-0000-0000-000000000000"
 EXERCISE_ID = "11111111-1111-1111-1111-111111111111"
+CANONICAL_ID = "22222222-2222-2222-2222-222222222222"
+
+
+async def test_get_canonical_workout_returns_merged_payload(httpx_mock: HTTPXMock) -> None:
+    payload = {
+        "id": CANONICAL_ID,
+        "user_id": USER_ID,
+        "type": "strength_training",
+        "name": "Full Body B",
+        "exercises": [{"title": "Romanian Deadlift"}],
+        "calories_kcal": 201.693,
+        "sources": [{"provider": "hevy"}, {"provider": "apple"}],
+        "provenance": {"exercises": "hevy", "calories_kcal": "apple"},
+    }
+    httpx_mock.add_response(
+        method="GET",
+        url=f"https://api.test.com/api/v1/users/{USER_ID}/canonical-workouts/{CANONICAL_ID}",
+        json=payload,
+    )
+
+    assert await get_canonical_workout(USER_ID, CANONICAL_ID) == payload
 
 
 async def test_list_strength_exercises_passes_search(httpx_mock: HTTPXMock) -> None:

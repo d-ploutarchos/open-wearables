@@ -14,6 +14,15 @@ strength_router = FastMCP(name="Strength Training Tools")
 
 
 @strength_router.tool
+async def get_canonical_workout(user_id: str, canonical_workout_id: str) -> dict:
+    """Get one merged workout with Hevy exercises, Apple physiology, source records, and field provenance."""
+    try:
+        return await client.get_canonical_workout(user_id, canonical_workout_id)
+    except OpenWearablesError as exc:
+        return {"error": str(exc), "canonical_workout_id": canonical_workout_id}
+
+
+@strength_router.tool
 async def list_strength_exercises(user_id: str, search: str | None = None) -> dict:
     """List queryable exercise identities, optionally matching a name such as 'squat'."""
     try:
