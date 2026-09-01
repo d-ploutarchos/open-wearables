@@ -15,12 +15,14 @@ from .exercise_set import ExerciseSet
 from .health_score import HealthScore
 from .invitation import Invitation
 from .menstrual_cycle_details import MenstrualCycleDetails
+from .performance_record import PerformanceRecord, PerformanceRecordHistory
 from .personal_record import PersonalRecord
 from .provider_priority import ProviderPriority
 from .provider_setting import ProviderSetting
 from .refresh_token import RefreshToken
 from .series_type_definition import SeriesTypeDefinition
 from .sleep_details import SleepDetails
+from .strength_effort import StrengthEffort
 from .user import User
 from .user_connection import UserConnection
 from .user_invitation_code import UserInvitationCode
@@ -60,6 +62,9 @@ __all__ = [
     "WorkoutDetails",
     "WorkoutExercise",
     "PersonalRecord",
+    "PerformanceRecord",
+    "PerformanceRecordHistory",
+    "StrengthEffort",
     "DataPointSeries",
     "SeriesTypeDefinition",
     "HealthScore",

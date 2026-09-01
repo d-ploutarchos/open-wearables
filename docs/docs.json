@@ -253,7 +253,9 @@
               "GET /api/v1/users/{user_id}/strength/exercises",
               "GET /api/v1/users/{user_id}/strength/exercises/{exercise_id}/history",
               "GET /api/v1/users/{user_id}/canonical-workouts",
-              "GET /api/v1/users/{user_id}/canonical-workouts/{canonical_workout_id}"
+              "GET /api/v1/users/{user_id}/canonical-workouts/{canonical_workout_id}",
+              "GET /api/v1/users/{user_id}/performance-records",
+              "GET /api/v1/users/{user_id}/performance-records/history"
             ]
           },
           {

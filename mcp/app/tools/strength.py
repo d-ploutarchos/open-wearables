@@ -14,6 +14,50 @@ strength_router = FastMCP(name="Strength Training Tools")
 
 
 @strength_router.tool
+async def get_personal_records(
+    user_id: str,
+    sport: str = "strength",
+    exercise_id: str | None = None,
+    record_type: str | None = None,
+) -> dict:
+    """Get current athletic PRs, including max load, exact-rep max, estimated 1RM, and set volume.
+
+    These are provider-neutral performance records, not the demographic profile historically
+    called a personal record by the Open Wearables data model.
+    """
+    try:
+        records = await client.list_performance_records(
+            user_id,
+            sport=sport,
+            exercise_id=exercise_id,
+            record_type=record_type,
+        )
+        return {"user_id": user_id, "sport": sport, "records": records, "total": len(records)}
+    except OpenWearablesError as exc:
+        return {"error": str(exc), "records": [], "total": 0}
+
+
+@strength_router.tool
+async def get_pr_history(
+    user_id: str,
+    exercise_id: str | None = None,
+    record_type: str | None = None,
+    limit: int = 100,
+) -> dict:
+    """Get the chronological ledger of strength PRs, corrections, restorations, and revocations."""
+    try:
+        history = await client.list_performance_record_history(
+            user_id,
+            exercise_id=exercise_id,
+            record_type=record_type,
+            limit=limit,
+        )
+        return {"user_id": user_id, "history": history, "total": len(history)}
+    except OpenWearablesError as exc:
+        return {"error": str(exc), "history": [], "total": 0}
+
+
+@strength_router.tool
 async def list_canonical_workouts(
     user_id: str,
     start_date: str | None = None,

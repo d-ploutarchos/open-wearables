@@ -20,6 +20,7 @@ from .meta import router as meta_router
 from .oauth import router as oauth_router
 from .oura_webhooks import router as oura_webhooks_router
 from .outgoing_webhooks import router as outgoing_webhooks_router
+from .performance_records import router as performance_records_router
 from .priorities import router as priorities_router
 from .sdk_logs import router as sdk_logs_router
 from .sdk_sync import router as sdk_sync_router
@@ -44,6 +45,7 @@ v1_router.include_router(meta_router, tags=["External: Meta"])
 v1_router.include_router(users_router, tags=["External: Users"])
 v1_router.include_router(connections_router, tags=["External: Connections"])
 v1_router.include_router(canonical_workouts_router, tags=["External: Canonical Workouts"])
+v1_router.include_router(performance_records_router, tags=["External: Performance Records"])
 v1_router.include_router(summaries_router, tags=["External: Summaries"])
 v1_router.include_router(timeseries_router, tags=["External: Timeseries"])
 v1_router.include_router(events_router, tags=["External: Events"])

@@ -42,6 +42,8 @@ mcp = FastMCP(
     - get_strength_progress: Analyze load, volume, repetitions, and estimated 1RM over time
     - get_canonical_workout: Read one physical workout merged across structural and physiological sources
     - list_canonical_workouts: Search merged workout history by date, workout name, or exercise name
+    - get_personal_records: Read current provider-neutral athletic PRs
+    - get_pr_history: Read strength PR progression, corrections, and revocations
     - get_timeseries: Get granular time-series samples (e.g. weight, SpO2, HRV, intraday heart rate)
     - get_menstrual_cycles: Get menstrual cycle records (cycle day, phase, period and cycle lengths)
 

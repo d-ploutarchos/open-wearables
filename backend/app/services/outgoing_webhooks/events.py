@@ -82,6 +82,7 @@ def on_workout_created(
     canonical_id: UUID | None = None,
     sources: list[dict[str, Any]] | None = None,
     provenance: dict[str, str] | None = None,
+    performance_records: list[dict[str, Any]] | None = None,
 ) -> None:
     _dispatch(
         WebhookEventType.WORKOUT_CREATED,
@@ -107,6 +108,7 @@ def on_workout_created(
                 "exercises": exercises,
                 "sources": sources,
                 "provenance": provenance,
+                "performance_records": performance_records,
             },
         },
         idempotency_key=f"workout.created.{record_id}",

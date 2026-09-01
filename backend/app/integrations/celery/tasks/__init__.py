@@ -37,6 +37,7 @@ from .garmin.backfill_trigger import (
 )
 from .garmin.gc_task import gc_stuck_backfills
 from .hevy_workout_task import ingest_hevy_workout, reconcile_all_hevy_workouts
+from .performance_record_task import backfill_strength_performance_records
 from .periodic_sync_task import sync_all_users
 from .process_aws_upload_task import complete_and_process_aws_upload, process_aws_upload
 from .process_sdk_upload_task import process_sdk_upload
@@ -65,6 +66,7 @@ __all__ = [
     # Archival
     "run_daily_archival",
     "backfill_canonical_strength_workouts",
+    "backfill_strength_performance_records",
     "emit_canonical_strength_workout",
     # Apple XML multipart uploads
     "complete_and_process_aws_upload",

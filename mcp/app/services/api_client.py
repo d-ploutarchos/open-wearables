@@ -288,6 +288,49 @@ class OpenWearablesClient:
             params=params,
         )
 
+    async def list_performance_records(
+        self,
+        user_id: str,
+        *,
+        sport: str | None = None,
+        exercise_id: str | None = None,
+        record_type: str | None = None,
+        include_inactive: bool = False,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str | bool] = {"include_inactive": include_inactive}
+        if sport:
+            params["sport"] = sport
+        if exercise_id:
+            params["exercise_id"] = exercise_id
+        if record_type:
+            params["record_type"] = record_type
+        response = await self._request(
+            "GET",
+            f"/api/v1/users/{user_id}/performance-records",
+            params=params,
+        )
+        return cast(list[dict[str, Any]], response)
+
+    async def list_performance_record_history(
+        self,
+        user_id: str,
+        *,
+        exercise_id: str | None = None,
+        record_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, str | int] = {"limit": limit}
+        if exercise_id:
+            params["exercise_id"] = exercise_id
+        if record_type:
+            params["record_type"] = record_type
+        response = await self._request(
+            "GET",
+            f"/api/v1/users/{user_id}/performance-records/history",
+            params=params,
+        )
+        return cast(list[dict[str, Any]], response)
+
 
 # Singleton instance
 client = OpenWearablesClient()

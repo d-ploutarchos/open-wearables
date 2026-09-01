@@ -7,6 +7,7 @@ from celery import shared_task
 from app.database import SessionLocal
 from app.services.canonical_workout_service import canonical_workout_service
 from app.services.outgoing_webhooks.events import on_workout_created
+from app.services.performance_record_service import performance_record_service
 from app.utils.structured_logging import log_structured
 
 logger = getLogger(__name__)
@@ -53,6 +54,7 @@ def emit_canonical_strength_workout(record_id: str) -> dict[str, str | bool]:
         response = canonical_workout_service.get_response(db, canonical.id)
         if response is None:
             return {"emitted": False, "reason": "canonical_workout_incomplete"}
+        strength_analysis = performance_record_service.analyze_strength_workout(db, canonical.id)
 
         primary_provider = response.provenance.get("name", "canonical")
         primary_source = next((source for source in response.sources if source.provider == primary_provider), None)
@@ -75,6 +77,7 @@ def emit_canonical_strength_workout(record_id: str) -> dict[str, str | bool]:
             exercises=response.exercises,
             sources=[source.model_dump(mode="json") for source in response.sources],
             provenance=response.provenance,
+            performance_records=[item.model_dump(mode="json") for item in strength_analysis.records_changed],
         )
         log_structured(
             logger,

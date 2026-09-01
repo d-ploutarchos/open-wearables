@@ -71,3 +71,18 @@ curl --get \
 Canonical workout history can be filtered by `start_datetime`, `end_datetime`, or `search`. Search matches both workout titles and exercise names and returns cursor-paginated merged workouts.
 
 The MCP server provides `list_canonical_workouts`, `get_canonical_workout`, `list_strength_exercises`, and `get_strength_progress`. Exercise variants remain separate unless a caller explicitly selects the intended stable exercise ID. Estimated one-repetition maximum uses the Epley formula and is labelled as an estimate.
+
+## Strength performance records
+
+Open Wearables derives versioned performance efforts from positive-load, positive-repetition working sets. Warm-up sets are excluded. The first algorithm version manages four record types:
+
+- `max_load` — the heaviest eligible set
+- `rep_max` — the heaviest eligible set for an exact repetition count
+- `estimated_one_rep_max` — Epley e1RM for sets of 1–12 repetitions
+- `set_volume` — the largest single-set load × repetitions value
+
+Current records are available at `GET /api/v1/users/{user_id}/performance-records`. Filter with `sport=strength`, `exercise_id`, or `record_type`. The append-only change ledger is available at `GET /api/v1/users/{user_id}/performance-records/history` and labels entries as `created`, `improved`, `corrected`, `restored`, or `revoked`.
+
+Historical canonical workouts are analyzed silently by an idempotent five-minute repair job. For newly completed workouts, changed performance records are included in the existing canonical `workout.created` payload under `performance_records`, allowing a coach to mention PRs without sending a second workout message.
+
+Agents can use the MCP tools `get_personal_records` and `get_pr_history`. These athletic records are deliberately separate from the legacy Open Wearables `PersonalRecord` demographic profile.

@@ -2,6 +2,8 @@ from pytest_httpx import HTTPXMock
 
 from app.tools.strength import (
     get_canonical_workout,
+    get_personal_records,
+    get_pr_history,
     get_strength_progress,
     list_canonical_workouts,
     list_strength_exercises,
@@ -10,6 +12,46 @@ from app.tools.strength import (
 USER_ID = "00000000-0000-0000-0000-000000000000"
 EXERCISE_ID = "11111111-1111-1111-1111-111111111111"
 CANONICAL_ID = "22222222-2222-2222-2222-222222222222"
+
+
+async def test_get_personal_records_returns_strength_prs(httpx_mock: HTTPXMock) -> None:
+    payload = [
+        {
+            "id": "33333333-3333-3333-3333-333333333333",
+            "sport": "strength",
+            "record_type": "estimated_one_rep_max",
+            "exercise_id": EXERCISE_ID,
+            "exercise_name": "Squat (Barbell)",
+            "value": "128.333",
+            "unit": "kg",
+        }
+    ]
+    httpx_mock.add_response(
+        method="GET",
+        url=(f"https://api.test.com/api/v1/users/{USER_ID}/performance-records?include_inactive=false&sport=strength"),
+        json=payload,
+    )
+
+    result = await get_personal_records(USER_ID)
+
+    assert result["total"] == 1
+    assert result["records"][0]["record_type"] == "estimated_one_rep_max"
+
+
+async def test_get_pr_history_passes_filters(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=(
+            f"https://api.test.com/api/v1/users/{USER_ID}/performance-records/history"
+            f"?limit=25&exercise_id={EXERCISE_ID}&record_type=max_load"
+        ),
+        json=[{"change_type": "improved", "value": "120.000"}],
+    )
+
+    result = await get_pr_history(USER_ID, exercise_id=EXERCISE_ID, record_type="max_load", limit=25)
+
+    assert result["total"] == 1
+    assert result["history"][0]["change_type"] == "improved"
 
 
 async def test_get_canonical_workout_returns_merged_payload(httpx_mock: HTTPXMock) -> None:
