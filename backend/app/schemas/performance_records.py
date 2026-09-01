@@ -24,6 +24,8 @@ class PerformanceRecordResponse(BaseModel):
     source_repetitions: int | None = None
     source_duration_seconds: Decimal | None = None
     source_distance_meters: Decimal | None = None
+    segment_start_datetime: datetime | None = None
+    segment_end_datetime: datetime | None = None
     calculation_method: str | None = None
     confidence: str | None = None
     algorithm_version: str

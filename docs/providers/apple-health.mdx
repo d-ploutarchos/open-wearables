@@ -94,9 +94,9 @@ See the [Flutter SDK documentation](/sdk/flutter#supported-health-data-types) fo
 
 Open Wearables maintains provider-neutral fastest-time records for 400 m, 800 m, 1 km, 1 mile, 2 km, 5 km, 10 km, half marathon, and marathon. Records are exposed through `GET /api/v1/users/{user_id}/performance-records` with `sport=running`, and their change history is available through the companion `/history` endpoint.
 
-The current Apple SDK supplies authoritative whole-workout distance and elapsed time. A run is eligible for a standard-distance record only when its completed distance is close to that standard distance; Open Wearables does not extrapolate a 5K result from a longer run's average pace. Records identify this provenance with `calculation_method=whole_run` and `confidence=high`.
+When Apple Health supplies granular, same-source running-distance samples, Open Wearables scans the measured cumulative-distance trace for the fastest continuous segment at every supported distance. These records use `calculation_method=distance_samples`, include the measured segment's start and end timestamps, and use `confidence=medium` because HealthKit distance increments are interpolated at sample boundaries.
 
-Fastest continuous segments inside a longer run require timestamped distance, speed, or route samples. Until those samples are supplied by the mobile bridge, in-run segment PRs are intentionally omitted rather than estimated.
+If a valid granular trace is unavailable, a run is eligible only when its completed whole-workout distance is close to the standard distance. Open Wearables never extrapolates a 5K result from a longer run's average pace. Whole-run records use `calculation_method=whole_run` and `confidence=high`.
 
 New running PRs are included in the existing `workout.created` event under `performance_records`, so consumers can produce one post-run coaching message.
 

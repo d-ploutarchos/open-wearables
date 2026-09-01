@@ -9,12 +9,14 @@ from app.database import DbSession
 from app.models import (
     CanonicalWorkout,
     CanonicalWorkoutSource,
+    DataPointSeries,
     EventRecord,
     ExerciseDefinition,
     ExerciseSet,
     PerformanceRecord,
     PerformanceRecordHistory,
     RunningEffort,
+    SeriesTypeDefinition,
     StrengthEffort,
     WorkoutExercise,
 )
@@ -137,6 +139,29 @@ class PerformanceRecordRepository:
     def save_running_effort(db: DbSession, effort: RunningEffort) -> None:
         db.add(effort)
         db.flush()
+
+    @staticmethod
+    def list_distance_samples_for_event(db: DbSession, event_record_id: UUID) -> list[tuple[datetime, Decimal]]:
+        record = db.query(EventRecord).filter(EventRecord.id == event_record_id).one_or_none()
+        if record is None:
+            return []
+        return cast(
+            list[tuple[datetime, Decimal]],
+            db.query(DataPointSeries.recorded_at, DataPointSeries.value)
+            .join(
+                SeriesTypeDefinition,
+                SeriesTypeDefinition.id == DataPointSeries.series_type_definition_id,
+            )
+            .filter(
+                DataPointSeries.data_source_id == record.data_source_id,
+                SeriesTypeDefinition.code == "distance_walking_running",
+                DataPointSeries.recorded_at >= record.start_datetime,
+                DataPointSeries.recorded_at <= record.end_datetime,
+                DataPointSeries.value > 0,
+            )
+            .order_by(DataPointSeries.recorded_at.asc())
+            .all(),
+        )
 
     @staticmethod
     def list_running_efforts(

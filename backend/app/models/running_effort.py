@@ -33,6 +33,8 @@ class RunningEffort(BaseDbModel):
     actual_distance_meters: Mapped[Decimal] = mapped_column(Numeric(12, 3))
     elapsed_seconds: Mapped[Decimal] = mapped_column(Numeric(12, 3))
     pace_seconds_per_km: Mapped[Decimal] = mapped_column(Numeric(10, 3))
+    segment_start_datetime: Mapped[datetime | None]
+    segment_end_datetime: Mapped[datetime | None]
     calculation_method: Mapped[str_32]
     confidence: Mapped[str_32]
     algorithm_version: Mapped[str_32]

@@ -1,14 +1,16 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 from app.models import RunningEffort, StrengthEffort
+from app.schemas.canonical_workout import CanonicalWorkoutResponse, CanonicalWorkoutSourceResponse
 from app.services.performance_record_service import (
     RUNNING_ALGORITHM_VERSION,
     STRENGTH_ALGORITHM_VERSION,
     PerformanceRecordService,
     _RecordCandidate,
+    canonical_workout_service,
 )
 
 
@@ -105,6 +107,8 @@ def _running_effort(*, distance: int, seconds: str) -> RunningEffort:
         actual_distance_meters=Decimal(distance),
         elapsed_seconds=duration,
         pace_seconds_per_km=duration / Decimal(distance) * Decimal(1000),
+        segment_start_datetime=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        segment_end_datetime=datetime(2026, 9, 1, tzinfo=timezone.utc) + timedelta(seconds=float(duration)),
         calculation_method="whole_run",
         confidence="high",
         algorithm_version=RUNNING_ALGORITHM_VERSION,
@@ -115,6 +119,84 @@ def test_whole_run_eligibility_requires_standard_distance_finish() -> None:
     assert PerformanceRecordService._eligible_whole_run(Decimal("5020"), 5000) is True
     assert PerformanceRecordService._eligible_whole_run(Decimal("4900"), 5000) is False
     assert PerformanceRecordService._eligible_whole_run(Decimal("10000"), 5000) is False
+
+
+def test_distance_trace_finds_constant_pace_segments() -> None:
+    start = datetime(2026, 9, 1, 6, tzinfo=timezone.utc)
+    samples = [(start + timedelta(seconds=index), Decimal("5")) for index in range(1000)]
+    points = PerformanceRecordService._distance_trace_points(samples, start, start + timedelta(seconds=1000))
+
+    four_hundred = PerformanceRecordService._fastest_segment(points, 400)
+    five_thousand = PerformanceRecordService._fastest_segment(points, 5000)
+
+    assert four_hundred is not None
+    assert four_hundred.elapsed_seconds == Decimal("80.000")
+    assert five_thousand is not None
+    assert five_thousand.elapsed_seconds == Decimal("1000.000")
+
+
+def test_distance_trace_selects_fastest_continuous_window() -> None:
+    start = datetime(2026, 9, 1, 6, tzinfo=timezone.utc)
+    increments = [Decimal("2")] * 100 + [Decimal("4")] * 100 + [Decimal("2")] * 100
+    samples = [(start + timedelta(seconds=index), value) for index, value in enumerate(increments)]
+    points = PerformanceRecordService._distance_trace_points(samples, start, start + timedelta(seconds=300))
+
+    segment = PerformanceRecordService._fastest_segment(points, 200)
+
+    assert segment is not None
+    assert segment.elapsed_seconds == Decimal("50.000")
+    assert segment.start_datetime == start + timedelta(seconds=100)
+    assert segment.end_datetime == start + timedelta(seconds=150)
+
+
+def test_running_analysis_uses_matching_granular_source() -> None:
+    start = datetime(2026, 9, 1, 6, tzinfo=timezone.utc)
+    canonical_id = uuid4()
+    user_id = uuid4()
+    sparse_source_id = uuid4()
+    granular_source_id = uuid4()
+    response = CanonicalWorkoutResponse(
+        id=canonical_id,
+        user_id=user_id,
+        type="running",
+        name="Run",
+        start_time=start,
+        end_time=start + timedelta(seconds=200),
+        duration_seconds=200,
+        distance_meters=1000,
+        sources=[
+            CanonicalWorkoutSourceResponse(
+                event_record_id=sparse_source_id,
+                provider="apple",
+                start_time=start,
+                end_time=start + timedelta(seconds=200),
+            ),
+            CanonicalWorkoutSourceResponse(
+                event_record_id=granular_source_id,
+                provider="apple",
+                start_time=start,
+                end_time=start + timedelta(seconds=200),
+            ),
+        ],
+        provenance={"distance_meters": "apple"},
+    )
+    sparse = [(start + timedelta(seconds=index * 50), Decimal("250")) for index in range(4)]
+    granular = [(start + timedelta(seconds=index), Decimal("5")) for index in range(200)]
+    service = PerformanceRecordService()
+    service.repository = MagicMock()
+    service.repository.list_distance_samples_for_event.side_effect = lambda _db, source_id: (
+        granular if source_id == granular_source_id else sparse
+    )
+    service.repository.get_running_effort.return_value = None
+    with patch.object(canonical_workout_service, "get_response", return_value=response):
+        processed, distances, returned_user_id = service._upsert_running_efforts(MagicMock(), canonical_id)
+
+    assert processed == 3
+    assert distances == {400, 800, 1000}
+    assert returned_user_id == user_id
+    efforts = [call.args[1] for call in service.repository.save_running_effort.call_args_list]
+    assert all(effort.event_record_id == granular_source_id for effort in efforts)
+    assert all(effort.calculation_method == "distance_samples" for effort in efforts)
 
 
 def test_running_candidate_selects_fastest_measured_finish() -> None:

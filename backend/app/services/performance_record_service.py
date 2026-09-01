@@ -1,3 +1,4 @@
+from bisect import bisect_left
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -17,7 +18,7 @@ from app.schemas.performance_records import (
 from app.services.canonical_workout_service import canonical_workout_service
 
 STRENGTH_ALGORITHM_VERSION = "strength-v1"
-RUNNING_ALGORITHM_VERSION = "running-whole-v1"
+RUNNING_ALGORITHM_VERSION = "running-segments-v1"
 E1RM_MAX_REPETITIONS = 12
 STANDARD_RUNNING_DISTANCES = (400, 800, 1000, 1609, 2000, 5000, 10000, 21097, 42195)
 
@@ -46,6 +47,13 @@ class _RunningRecordCandidate:
     effort: RunningEffort
 
 
+@dataclass(frozen=True)
+class _RunningSegment:
+    elapsed_seconds: Decimal
+    start_datetime: datetime
+    end_datetime: datetime
+
+
 class PerformanceRecordService:
     def __init__(self) -> None:
         self.repository = PerformanceRecordRepository()
@@ -70,6 +78,83 @@ class PerformanceRecordService:
         maximum = target + max(Decimal("10"), target * Decimal("0.02"))
         return minimum <= actual_distance_meters <= maximum
 
+    @staticmethod
+    def _distance_trace_points(
+        samples: list[tuple[datetime, Decimal]],
+        workout_start: datetime,
+        workout_end: datetime,
+    ) -> list[tuple[datetime, Decimal]]:
+        """Convert HealthKit interval-start distance increments into cumulative endpoints."""
+        if not samples or workout_end <= workout_start:
+            return []
+        first_time = max(workout_start, samples[0][0])
+        points = [(first_time, Decimal(0))]
+        cumulative = Decimal(0)
+        for index, (_timestamp, value) in enumerate(samples):
+            endpoint = samples[index + 1][0] if index + 1 < len(samples) else workout_end
+            endpoint = min(workout_end, max(points[-1][0], endpoint))
+            cumulative += value
+            if endpoint == points[-1][0]:
+                points[-1] = (endpoint, cumulative)
+            else:
+                points.append((endpoint, cumulative))
+        return points
+
+    @staticmethod
+    def _interpolate_time(
+        points: list[tuple[datetime, Decimal]],
+        cumulative_values: list[Decimal],
+        target_cumulative: Decimal,
+    ) -> datetime:
+        index = bisect_left(cumulative_values, target_cumulative)
+        if index <= 0:
+            return points[0][0]
+        if index >= len(points):
+            return points[-1][0]
+        left_time, left_distance = points[index - 1]
+        right_time, right_distance = points[index]
+        if right_distance <= left_distance:
+            return right_time
+        fraction = float((target_cumulative - left_distance) / (right_distance - left_distance))
+        return left_time + (right_time - left_time) * fraction
+
+    @classmethod
+    def _fastest_segment(
+        cls,
+        points: list[tuple[datetime, Decimal]],
+        target_distance_meters: int,
+    ) -> _RunningSegment | None:
+        if len(points) < 2:
+            return None
+        target = Decimal(target_distance_meters)
+        cumulative_values = [distance for _, distance in points]
+        if cumulative_values[-1] < target:
+            return None
+        best: _RunningSegment | None = None
+
+        def consider(start_time: datetime, end_time: datetime) -> None:
+            nonlocal best
+            seconds = Decimal(str((end_time - start_time).total_seconds())).quantize(Decimal("0.001"))
+            if seconds <= 0 or target / seconds > Decimal("12"):
+                return
+            segment = _RunningSegment(seconds, start_time, end_time)
+            if best is None or segment.elapsed_seconds < best.elapsed_seconds:
+                best = segment
+
+        for end_time, end_distance in points[1:]:
+            if end_distance < target:
+                continue
+            start_time = cls._interpolate_time(points, cumulative_values, end_distance - target)
+            consider(start_time, end_time)
+
+        total_distance = cumulative_values[-1]
+        for start_time, start_distance in points[:-1]:
+            if start_distance + target > total_distance:
+                break
+            end_time = cls._interpolate_time(points, cumulative_values, start_distance + target)
+            consider(start_time, end_time)
+        return best
+
     def _upsert_running_efforts(
         self,
         db: DbSession,
@@ -83,19 +168,48 @@ class PerformanceRecordService:
         if actual_distance <= 0 or duration <= 0 or not response.sources:
             return 0, set(), response.user_id
 
+        distance_provider = response.provenance.get("distance_meters") or response.provenance.get("name")
+        candidate_sources = [
+            item for item in response.sources if item.provider == distance_provider
+        ] or response.sources
+        traces = []
+        for candidate_source in candidate_sources:
+            candidate_samples = self.repository.list_distance_samples_for_event(db, candidate_source.event_record_id)
+            candidate_total = sum((value for _, value in candidate_samples), Decimal(0))
+            relative_error = (
+                abs(candidate_total - actual_distance) / actual_distance if candidate_total > 0 else Decimal("Infinity")
+            )
+            traces.append((relative_error, -len(candidate_samples), candidate_source, candidate_samples))
+        _error, _sample_rank, source, samples = min(traces, key=lambda item: (item[0], item[1]))
+        event_record_id = source.event_record_id
+        sample_total = sum((value for _, value in samples), Decimal(0))
+        trace_is_valid = (
+            len(samples) >= 20
+            and sample_total > 0
+            and abs(sample_total - actual_distance) / actual_distance <= Decimal("0.10")
+        )
+        points = self._distance_trace_points(samples, response.start_time, response.end_time) if trace_is_valid else []
+
         processed = 0
         touched_distances: set[int] = set()
-        event_record_id = response.sources[0].event_record_id
         for target_distance in STANDARD_RUNNING_DISTANCES:
-            if not self._eligible_whole_run(actual_distance, target_distance):
+            segment = self._fastest_segment(points, target_distance) if points else None
+            whole_run = self._eligible_whole_run(actual_distance, target_distance)
+            if segment is None and not whole_run:
                 continue
+            elapsed = segment.elapsed_seconds if segment else duration
+            calculation_method = "distance_samples" if segment else "whole_run"
+            confidence = "medium" if segment else "high"
+            segment_start = segment.start_datetime if segment else response.start_time
+            segment_end = segment.end_datetime if segment else response.end_time
+            measured_distance = Decimal(target_distance) if segment else actual_distance
             effort = self.repository.get_running_effort(
                 db,
                 canonical_workout_id,
                 target_distance,
                 RUNNING_ALGORITHM_VERSION,
             )
-            pace = (duration / actual_distance * Decimal(1000)).quantize(Decimal("0.001"))
+            pace = (elapsed / Decimal(target_distance) * Decimal(1000)).quantize(Decimal("0.001"))
             if effort is None:
                 effort = RunningEffort(
                     id=uuid4(),
@@ -104,21 +218,25 @@ class PerformanceRecordService:
                     event_record_id=event_record_id,
                     performed_at=response.start_time,
                     target_distance_meters=target_distance,
-                    actual_distance_meters=actual_distance,
-                    elapsed_seconds=duration,
+                    actual_distance_meters=measured_distance,
+                    elapsed_seconds=elapsed,
                     pace_seconds_per_km=pace,
-                    calculation_method="whole_run",
-                    confidence="high",
+                    segment_start_datetime=segment_start,
+                    segment_end_datetime=segment_end,
+                    calculation_method=calculation_method,
+                    confidence=confidence,
                     algorithm_version=RUNNING_ALGORITHM_VERSION,
                 )
             else:
                 effort.event_record_id = event_record_id
                 effort.performed_at = response.start_time
-                effort.actual_distance_meters = actual_distance
-                effort.elapsed_seconds = duration
+                effort.actual_distance_meters = measured_distance
+                effort.elapsed_seconds = elapsed
                 effort.pace_seconds_per_km = pace
-                effort.calculation_method = "whole_run"
-                effort.confidence = "high"
+                effort.segment_start_datetime = segment_start
+                effort.segment_end_datetime = segment_end
+                effort.calculation_method = calculation_method
+                effort.confidence = confidence
             self.repository.save_running_effort(db, effort)
             processed += 1
             touched_distances.add(target_distance)
@@ -461,6 +579,8 @@ class PerformanceRecordService:
             source_repetitions=effort.repetitions if effort else None,
             source_duration_seconds=running_effort.elapsed_seconds if running_effort else None,
             source_distance_meters=running_effort.actual_distance_meters if running_effort else None,
+            segment_start_datetime=running_effort.segment_start_datetime if running_effort else None,
+            segment_end_datetime=running_effort.segment_end_datetime if running_effort else None,
             calculation_method=running_effort.calculation_method if running_effort else None,
             confidence=running_effort.confidence if running_effort else None,
             algorithm_version=record.algorithm_version,
