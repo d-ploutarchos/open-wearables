@@ -284,6 +284,7 @@ class UserConnectionRepository(CrudRepository[UserConnection, UserConnectionCrea
                     access_token=None,
                     refresh_token=None,
                     token_expires_at=None,
+                    webhook_secret_hash=None,
                     updated_at=datetime.now(timezone.utc),
                 ),
             ),

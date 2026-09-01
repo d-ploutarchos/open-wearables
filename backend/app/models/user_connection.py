@@ -46,4 +46,6 @@ class UserConnection(BaseDbModel):
     # Metadata
     status: Mapped[ConnectionStatus]
     last_synced_at: Mapped[datetime | None]
+    webhook_secret_hash: Mapped[str | None]
+    last_webhook_at: Mapped[datetime | None]
     updated_at: Mapped[datetime]

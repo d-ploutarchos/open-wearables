@@ -8,6 +8,8 @@ from .developer import Developer
 from .device_type_priority import DeviceTypePriority
 from .event_record import EventRecord
 from .event_record_detail import DetailType, EventRecordDetail
+from .exercise_definition import ExerciseDefinition
+from .exercise_set import ExerciseSet
 from .health_score import HealthScore
 from .invitation import Invitation
 from .menstrual_cycle_details import MenstrualCycleDetails
@@ -21,6 +23,7 @@ from .user import User
 from .user_connection import UserConnection
 from .user_invitation_code import UserInvitationCode
 from .workout_details import WorkoutDetails
+from .workout_exercise import WorkoutExercise
 
 # Single source of truth mapping detail_type -> concrete model, derived from the
 # EventRecordDetail subclasses defined above. Adding a new detail model (and
@@ -46,9 +49,12 @@ __all__ = [
     "UserInvitationCode",
     "EventRecord",
     "EventRecordDetail",
+    "ExerciseDefinition",
+    "ExerciseSet",
     "MenstrualCycleDetails",
     "SleepDetails",
     "WorkoutDetails",
+    "WorkoutExercise",
     "PersonalRecord",
     "DataPointSeries",
     "SeriesTypeDefinition",

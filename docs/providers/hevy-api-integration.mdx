@@ -1,0 +1,53 @@
+---
+title: "Hevy Strength Training Integration"
+description: "Connect Hevy to import detailed exercises and sets, receive completed-workout webhooks, and query strength progression through MCP."
+---
+
+## Overview
+
+The Hevy provider stores every workout as a standard Open Wearables workout and also normalizes its exercises and sets for longitudinal analysis. This supports questions such as “How has my barbell squat progressed over six months?” without requiring an agent to scan raw workout JSON.
+
+Imported set fields include weight in kilograms, repetitions, set type, distance, duration, RPE, and custom metrics. The original provider response can also be retained through [raw payload storage](/dev-guides/raw-payload-storage).
+
+## Connection flow
+
+Hevy uses a user-scoped API key rather than OAuth. Mobile clients authenticate to Open Wearables with their SDK user token and submit the key once:
+
+```bash
+curl --request POST \
+  --url "https://api.example.com/api/v1/sdk/users/550e8400-e29b-41d4-a716-446655440000/connections/hevy" \
+  --header "Authorization: Bearer ow_sdk_user_token" \
+  --header "Content-Type: application/json" \
+  --data '{"api_key":"newly-rotated-hevy-api-key"}'
+```
+
+Open Wearables validates the key against Hevy, encrypts it at rest, starts a historical backfill, and returns a connection-specific webhook URL and one-time authorization value. Never put a Hevy API key in source control, logs, or an outgoing webhook.
+
+Set `PROVIDER_CREDENTIALS_KEY` to a stable, long random passphrase in every API and worker environment. If omitted, credential encryption derives its key from `SECRET_KEY`.
+
+## Completed-workout webhook
+
+Copy the returned `webhook_url` and `webhook_authorization` values into Hevy's webhook settings. A notification contains a workout identifier:
+
+```json
+{
+  "workoutId": "b459cba5-cd6d-463c-abd6-54f8eafcadcb"
+}
+```
+
+Open Wearables authenticates the notification, responds immediately, and fetches the complete workout asynchronously. Duplicate notifications are idempotent and do not create duplicate outgoing `workout.created` events.
+
+Periodic reconciliation uses Hevy's workout-events endpoint with a five-minute overlap to recover missed notifications, edits, and deletions.
+
+## Agent queries
+
+The REST API exposes stable exercise identities and set-derived history:
+
+```bash
+curl --get \
+  --url "https://api.example.com/api/v1/users/550e8400-e29b-41d4-a716-446655440000/strength/exercises" \
+  --header "X-Open-Wearables-API-Key: ow_agent_api_key" \
+  --data-urlencode "search=squat"
+```
+
+The MCP server provides `list_strength_exercises` and `get_strength_progress`. Exercise variants remain separate unless a caller explicitly selects the intended stable exercise ID. Estimated one-repetition maximum uses the Epley formula and is labelled as an estimate.

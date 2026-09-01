@@ -56,7 +56,8 @@
             "group": "Providers",
             "pages": [
               "providers/supported",
-              "providers/coverage"
+              "providers/coverage",
+              "providers/hevy-api-integration"
             ]
           },
           {
@@ -194,6 +195,16 @@
             ]
           },
           {
+            "group": "Hevy",
+            "pages": [
+              "POST /api/v1/sdk/users/{user_id}/connections/hevy",
+              "GET /api/v1/sdk/users/{user_id}/connections/hevy",
+              "POST /api/v1/sdk/users/{user_id}/connections/hevy/webhook-secret",
+              "DELETE /api/v1/sdk/users/{user_id}/connections/hevy",
+              "POST /api/v1/hevy/webhooks/{connection_id}"
+            ]
+          },
+          {
             "group": "Providers",
             "pages": [
               "GET /api/v1/oauth/providers",
@@ -233,6 +244,13 @@
               "DELETE /api/v1/users/{user_id}/events/workouts/{workout_id}",
               "GET /api/v1/users/{user_id}/events/sleep",
               "DELETE /api/v1/users/{user_id}/events/sleep/{sleep_id}"
+            ]
+          },
+          {
+            "group": "Strength Training",
+            "pages": [
+              "GET /api/v1/users/{user_id}/strength/exercises",
+              "GET /api/v1/users/{user_id}/strength/exercises/{exercise_id}/history"
             ]
           },
           {

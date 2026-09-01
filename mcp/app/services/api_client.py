@@ -1,7 +1,7 @@
 """HTTP client for Open Wearables backend API."""
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -233,6 +233,29 @@ class OpenWearablesClient:
         if cursor:
             params["cursor"] = cursor
         return await self._request("GET", f"/api/v1/users/{user_id}/events/menstrual-cycles", params=params)
+
+    async def list_strength_exercises(self, user_id: str, search: str | None = None) -> list[dict[str, Any]]:
+        params = {"search": search} if search else None
+        response = await self._request("GET", f"/api/v1/users/{user_id}/strength/exercises", params=params)
+        return cast(list[dict[str, Any]], response)
+
+    async def get_strength_exercise_history(
+        self,
+        user_id: str,
+        exercise_id: str,
+        start_datetime: str | None = None,
+        end_datetime: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, str] = {}
+        if start_datetime:
+            params["start_datetime"] = start_datetime
+        if end_datetime:
+            params["end_datetime"] = end_datetime
+        return await self._request(
+            "GET",
+            f"/api/v1/users/{user_id}/strength/exercises/{exercise_id}/history",
+            params=params,
+        )
 
 
 # Singleton instance

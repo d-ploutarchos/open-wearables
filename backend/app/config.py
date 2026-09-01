@@ -69,6 +69,9 @@ class Settings(BaseSettings):
 
     # AUTH SETTINGS
     secret_key: str
+    # Optional dedicated passphrase for encrypting per-user provider credentials.
+    # Falls back to secret_key for backwards-compatible/self-hosted deployments.
+    provider_credentials_key: SecretStr | None = None
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     token_lifetime: int = 3600
