@@ -2,6 +2,7 @@ from pytest_httpx import HTTPXMock
 
 from app.tools.strength import (
     get_canonical_workout,
+    get_coaching_progress,
     get_personal_records,
     get_pr_history,
     get_strength_progress,
@@ -68,6 +69,37 @@ async def test_get_pr_history_passes_filters(httpx_mock: HTTPXMock) -> None:
 
     assert result["total"] == 1
     assert result["history"][0]["change_type"] == "improved"
+
+
+async def test_get_coaching_progress_resolves_exercise_and_passes_thresholds(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=f"https://api.test.com/api/v1/users/{USER_ID}/strength/exercises?search=Squat",
+        json=[{"exercise_id": EXERCISE_ID, "name": "Squat (Barbell)"}],
+    )
+    httpx_mock.add_response(
+        method="GET",
+        url=(
+            f"https://api.test.com/api/v1/users/{USER_ID}/coaching/progress"
+            f"?window_days=56&plateau_attempts=4&exercise_id={EXERCISE_ID}&distance_meters=5000"
+        ),
+        json={
+            "user_id": USER_ID,
+            "strength": [{"exercise_name": "Squat (Barbell)", "status": "progressing"}],
+            "running": [{"distance_meters": 5000, "status": "maintaining"}],
+        },
+    )
+
+    result = await get_coaching_progress(
+        USER_ID,
+        exercise="Squat",
+        distance_meters=5000,
+        window_days=56,
+        plateau_attempts=4,
+    )
+
+    assert result["strength"][0]["status"] == "progressing"
+    assert result["running"][0]["distance_meters"] == 5000
 
 
 async def test_get_canonical_workout_returns_merged_payload(httpx_mock: HTTPXMock) -> None:

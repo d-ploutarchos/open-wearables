@@ -13,6 +13,25 @@ logger = logging.getLogger(__name__)
 strength_router = FastMCP(name="Strength Training Tools")
 
 
+async def _resolve_exercise_id(user_id: str, exercise: str) -> tuple[str | None, dict | None]:
+    try:
+        UUID(exercise)
+        return exercise, None
+    except ValueError:
+        candidates = await client.list_strength_exercises(user_id, exercise)
+        exact = [item for item in candidates if item.get("name", "").casefold() == exercise.casefold()]
+        if len(exact) == 1:
+            return str(exact[0]["exercise_id"]), None
+        if len(candidates) == 1:
+            return str(candidates[0]["exercise_id"]), None
+        return None, {
+            "needs_exercise_selection": True,
+            "query": exercise,
+            "candidates": candidates,
+            "message": "Choose the intended exercise variant and call this tool again with its exercise_id.",
+        }
+
+
 @strength_router.tool
 async def get_personal_records(
     user_id: str,
@@ -61,6 +80,38 @@ async def get_pr_history(
         return {"user_id": user_id, "history": history, "total": len(history)}
     except OpenWearablesError as exc:
         return {"error": str(exc), "history": [], "total": 0}
+
+
+@strength_router.tool
+async def get_coaching_progress(
+    user_id: str,
+    exercise: str | None = None,
+    distance_meters: int | None = None,
+    window_days: int = 42,
+    plateau_attempts: int = 3,
+) -> dict:
+    """Get coach-ready longitudinal strength and running progression signals.
+
+    Returns latest and best performances, baseline change, recent strength-volume direction,
+    sessions or attempts since the best result, and conservative new/progressing/maintaining/plateau
+    labels. Pass an exercise name or UUID to focus strength analysis, or a standard running distance.
+    """
+    try:
+        exercise_id = None
+        if exercise:
+            exercise_id, selection = await _resolve_exercise_id(user_id, exercise)
+            if selection is not None:
+                return selection
+        return await client.get_coaching_progress(
+            user_id,
+            exercise_id=exercise_id,
+            distance_meters=distance_meters,
+            window_days=window_days,
+            plateau_attempts=plateau_attempts,
+        )
+    except OpenWearablesError as exc:
+        logger.error("API error in get_coaching_progress: %s", exc)
+        return {"error": str(exc), "strength": [], "running": []}
 
 
 @strength_router.tool
@@ -123,25 +174,9 @@ async def get_strength_progress(
     one-rep-max development. Different exercise variants remain separate identities.
     """
     try:
-        exercise_id = exercise
-        selected: dict | None = None
-        try:
-            UUID(exercise)
-        except ValueError:
-            candidates = await client.list_strength_exercises(user_id, exercise)
-            exact = [item for item in candidates if item.get("name", "").casefold() == exercise.casefold()]
-            if len(exact) == 1:
-                selected = exact[0]
-            elif len(candidates) == 1:
-                selected = candidates[0]
-            else:
-                return {
-                    "needs_exercise_selection": True,
-                    "query": exercise,
-                    "candidates": candidates,
-                    "message": "Choose the intended exercise variant and call this tool again with its exercise_id.",
-                }
-            exercise_id = str(selected["exercise_id"])
+        exercise_id, selection = await _resolve_exercise_id(user_id, exercise)
+        if selection is not None or exercise_id is None:
+            return selection or {"error": "Exercise could not be resolved"}
 
         history = await client.get_strength_exercise_history(
             user_id,

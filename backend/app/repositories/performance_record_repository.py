@@ -28,6 +28,7 @@ PerformanceRecordContext = tuple[
     StrengthEffort | None,
     RunningEffort | None,
 ]
+StrengthEffortContext = tuple[StrengthEffort, ExerciseDefinition]
 
 
 class PerformanceRecordRepository:
@@ -228,6 +229,52 @@ class PerformanceRecordRepository:
             )
             .all()
         )
+
+    @staticmethod
+    def list_strength_effort_contexts_for_user(
+        db: DbSession,
+        user_id: UUID,
+        algorithm_version: str,
+        exercise_definition_id: UUID | None = None,
+    ) -> list[StrengthEffortContext]:
+        query = (
+            db.query(StrengthEffort, ExerciseDefinition)
+            .join(ExerciseDefinition, ExerciseDefinition.id == StrengthEffort.exercise_definition_id)
+            .filter(
+                StrengthEffort.user_id == user_id,
+                StrengthEffort.algorithm_version == algorithm_version,
+                StrengthEffort.estimated_one_rep_max_kg.is_not(None),
+            )
+        )
+        if exercise_definition_id is not None:
+            query = query.filter(StrengthEffort.exercise_definition_id == exercise_definition_id)
+        return cast(
+            list[StrengthEffortContext],
+            query.order_by(
+                ExerciseDefinition.name.asc(),
+                StrengthEffort.performed_at.asc(),
+                StrengthEffort.id.asc(),
+            ).all(),
+        )
+
+    @staticmethod
+    def list_running_efforts_for_user(
+        db: DbSession,
+        user_id: UUID,
+        algorithm_version: str,
+        distance_meters: int | None = None,
+    ) -> list[RunningEffort]:
+        query = db.query(RunningEffort).filter(
+            RunningEffort.user_id == user_id,
+            RunningEffort.algorithm_version == algorithm_version,
+        )
+        if distance_meters is not None:
+            query = query.filter(RunningEffort.target_distance_meters == distance_meters)
+        return query.order_by(
+            RunningEffort.target_distance_meters.asc(),
+            RunningEffort.performed_at.asc(),
+            RunningEffort.id.asc(),
+        ).all()
 
     @staticmethod
     def get_record(

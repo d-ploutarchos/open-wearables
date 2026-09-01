@@ -314,6 +314,30 @@ class OpenWearablesClient:
         )
         return cast(list[dict[str, Any]], response)
 
+    async def get_coaching_progress(
+        self,
+        user_id: str,
+        *,
+        exercise_id: str | None = None,
+        distance_meters: int | None = None,
+        window_days: int = 42,
+        plateau_attempts: int = 3,
+    ) -> dict[str, Any]:
+        params: dict[str, str | int] = {
+            "window_days": window_days,
+            "plateau_attempts": plateau_attempts,
+        }
+        if exercise_id:
+            params["exercise_id"] = exercise_id
+        if distance_meters:
+            params["distance_meters"] = distance_meters
+        response = await self._request(
+            "GET",
+            f"/api/v1/users/{user_id}/coaching/progress",
+            params=params,
+        )
+        return cast(dict[str, Any], response)
+
     async def list_performance_record_history(
         self,
         user_id: str,

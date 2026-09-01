@@ -4,11 +4,37 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from app.database import DbSession
-from app.schemas.performance_records import PerformanceRecordHistoryResponse, PerformanceRecordResponse
+from app.schemas.performance_records import (
+    CoachingProgressResponse,
+    PerformanceRecordHistoryResponse,
+    PerformanceRecordResponse,
+)
 from app.services import ApiKeyDep
+from app.services.coaching_progress_service import coaching_progress_service
 from app.services.performance_record_service import performance_record_service
 
 router = APIRouter()
+
+
+@router.get("/users/{user_id}/coaching/progress")
+def get_coaching_progress(
+    user_id: UUID,
+    db: DbSession,
+    _api_key: ApiKeyDep,
+    exercise_id: UUID | None = None,
+    distance_meters: Annotated[int | None, Query(ge=1)] = None,
+    window_days: Annotated[int, Query(ge=7, le=365)] = 42,
+    plateau_attempts: Annotated[int, Query(ge=2, le=20)] = 3,
+) -> CoachingProgressResponse:
+    """Summarize strength and running progression with conservative plateau signals."""
+    return coaching_progress_service.get_progress(
+        db,
+        user_id,
+        exercise_definition_id=exercise_id,
+        distance_meters=distance_meters,
+        window_days=window_days,
+        plateau_attempts=plateau_attempts,
+    )
 
 
 @router.get("/users/{user_id}/performance-records")

@@ -100,6 +100,8 @@ If a valid granular trace is unavailable, a run is eligible only when its comple
 
 New running PRs are included in the existing `workout.created` event under `performance_records`, so consumers can produce one post-run coaching message.
 
+Agents can call `get_coaching_progress` to compare the latest and best measured times for each distance, quantify improvement from the first eligible attempt, and see attempts or days since the best result.
+
 ## Apple Health as a Data Bridge
 
 Even if a provider is **not yet directly supported** by Open Wearables, its data can still be collected by syncing it into Apple Health first.

@@ -68,3 +68,50 @@ class RunningAnalysisResult(BaseModel):
     canonical_workout_id: UUID
     efforts_processed: int
     records_changed: list[PerformanceRecordChangeResponse]
+
+
+class StrengthProgressInsight(BaseModel):
+    exercise_id: UUID
+    exercise_name: str
+    status: str
+    sessions: int
+    sessions_in_window: int
+    latest_performed_at: datetime
+    latest_estimated_one_rep_max_kg: Decimal
+    personal_best_estimated_one_rep_max_kg: Decimal
+    personal_best_at: datetime
+    estimated_one_rep_max_change_from_first_kg: Decimal
+    estimated_one_rep_max_change_percent: Decimal | None = None
+    sessions_since_best: int
+    days_since_best: int
+    latest_top_load_kg: Decimal
+    latest_volume_kg: Decimal
+    recent_average_volume_kg: Decimal | None = None
+    previous_average_volume_kg: Decimal | None = None
+    volume_change_percent: Decimal | None = None
+
+
+class RunningProgressInsight(BaseModel):
+    distance_meters: int
+    status: str
+    attempts: int
+    attempts_in_window: int
+    latest_performed_at: datetime
+    latest_time_seconds: Decimal
+    personal_best_time_seconds: Decimal
+    personal_best_at: datetime
+    seconds_improved_from_first: Decimal
+    improvement_percent: Decimal | None = None
+    attempts_since_best: int
+    days_since_best: int
+    calculation_method: str
+    confidence: str
+
+
+class CoachingProgressResponse(BaseModel):
+    user_id: UUID
+    generated_at: datetime
+    window_days: int
+    plateau_attempts: int
+    strength: list[StrengthProgressInsight]
+    running: list[RunningProgressInsight]

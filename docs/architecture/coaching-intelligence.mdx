@@ -1,0 +1,41 @@
+---
+title: "Coaching Intelligence"
+description: "Query provider-neutral strength and running progression signals for AI coaching agents."
+---
+
+Open Wearables turns normalized strength sets and measured running segments into deterministic coaching signals. This interpretation is calculated in the backend so every authorized agent receives the same evidence rather than independently guessing from raw workout payloads.
+
+## Progress endpoint
+
+```http
+GET /api/v1/users/{user_id}/coaching/progress
+```
+
+Optional query parameters:
+
+- `exercise_id` — restrict strength results to one stable exercise identity
+- `distance_meters` — restrict running results to one standard distance
+- `window_days` — recent and comparison window length, from 7–365 days; default 42
+- `plateau_attempts` — completed sessions or attempts since the best performance before a plateau signal; default 3
+
+Strength results include latest and best estimated 1RM, change from the first eligible session, latest load and volume, recent versus previous average volume, and sessions/days since the best result. Running results include latest and best measured time, time saved versus the first eligible attempt, and attempts/days since the best result.
+
+## Status semantics
+
+- `new` — only one eligible session or attempt exists
+- `progressing` — a strict new best occurred in either of the two latest eligible attempts
+- `maintaining` — performance remains near its established history without meeting the plateau rule
+- `plateau` — the configured number of eligible attempts have occurred since the last best result
+
+These labels are conservative evidence summaries, not medical findings or prescriptive training decisions. An agent should combine them with recovery, sleep, recent training load, injuries, goals, and user feedback before making a recommendation.
+
+## MCP access
+
+Use `get_coaching_progress` for questions such as:
+
+- “How is my squat developing?”
+- “Have I plateaued on bench press?”
+- “How has my 5K performance changed?”
+- “Which lifts have stalled recently?”
+
+Exercise names are resolved to stable, provider-specific exercise identities. If multiple variants match, the tool asks the caller to select the intended exercise instead of merging unlike movements.

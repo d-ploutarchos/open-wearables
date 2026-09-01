@@ -85,4 +85,4 @@ Current records are available at `GET /api/v1/users/{user_id}/performance-record
 
 Historical canonical workouts are analyzed silently by an idempotent five-minute repair job. For newly completed workouts, changed performance records are included in the existing canonical `workout.created` payload under `performance_records`, allowing a coach to mention PRs without sending a second workout message.
 
-Agents can use the MCP tools `get_personal_records` and `get_pr_history`. These athletic records are deliberately separate from the legacy Open Wearables `PersonalRecord` demographic profile.
+Agents can use the MCP tools `get_personal_records`, `get_pr_history`, and `get_coaching_progress`. The coaching-progress tool adds estimated-1RM development, recent volume direction, sessions since the best result, and conservative plateau signals. These athletic records are deliberately separate from the legacy Open Wearables `PersonalRecord` demographic profile.
