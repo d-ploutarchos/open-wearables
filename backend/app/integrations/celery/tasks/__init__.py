@@ -18,6 +18,7 @@ from app.services.providers.garmin.backfill_state import (
 )
 
 from .archival_task import run_daily_archival
+from .canonical_workout_task import emit_apple_strength_workout_after_dedupe
 from .emit_webhook_event_task import emit_webhook_event
 from .fill_missing_resilience_scores_task import fill_missing_resilience_scores
 from .fill_missing_sleep_scores_task import fill_missing_sleep_scores
@@ -63,6 +64,7 @@ __all__ = [
     "gc_stuck_backfills",
     # Archival
     "run_daily_archival",
+    "emit_apple_strength_workout_after_dedupe",
     # Apple XML multipart uploads
     "complete_and_process_aws_upload",
     # Sleep score calculation

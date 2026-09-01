@@ -508,6 +508,38 @@ class EventRecordService(
         return created_record, True, new_detail
 
     @staticmethod
+    def _emit_workout_webhook(
+        record: EventRecord,
+        data_source: DataSource,
+        detail: EventRecordDetailCreate,
+    ) -> None:
+        provider = getattr(data_source.provider, "value", str(data_source.provider))
+        avg_pace: int | None = None
+        if detail.average_speed and float(detail.average_speed) > 0:
+            avg_pace = int(1000 / float(detail.average_speed))
+        on_workout_created(
+            record_id=record.id,
+            user_id=data_source.user_id,
+            provider=provider,
+            device=data_source.device_model,
+            workout_type=record.type,
+            workout_name=record.source_name,
+            start_time=record.start_datetime.isoformat(),
+            end_time=record.end_datetime.isoformat(),
+            zone_offset=record.zone_offset,
+            duration_seconds=record.duration_seconds,
+            calories_kcal=float(detail.energy_burned) if detail.energy_burned is not None else None,
+            distance_meters=float(detail.distance) if detail.distance is not None else None,
+            avg_heart_rate_bpm=int(detail.heart_rate_avg) if detail.heart_rate_avg is not None else None,
+            max_heart_rate_bpm=int(detail.heart_rate_max) if detail.heart_rate_max is not None else None,
+            elevation_gain_meters=float(detail.total_elevation_gain)
+            if detail.total_elevation_gain is not None
+            else None,
+            avg_pace_sec_per_km=avg_pace,
+            exercises=detail.segments if provider == "hevy" else None,
+        )
+
+    @staticmethod
     def _emit_event_record_webhook(
         record: EventRecord,
         data_source: DataSource,
@@ -568,30 +600,14 @@ class EventRecordService(
                     pregnancy_snapshot=mcd.pregnancy_snapshot if mcd else None,
                 )
             case "workout":
-                avg_pace: int | None = None
-                if detail.average_speed and float(detail.average_speed) > 0:
-                    avg_pace = int(1000 / float(detail.average_speed))
-                on_workout_created(
-                    record_id=record.id,
-                    user_id=data_source.user_id,
-                    provider=provider,
-                    device=device,
-                    workout_type=record.type,
-                    workout_name=record.source_name,
-                    start_time=record.start_datetime.isoformat(),
-                    end_time=record.end_datetime.isoformat(),
-                    zone_offset=zone_offset,
-                    duration_seconds=record.duration_seconds,
-                    calories_kcal=float(detail.energy_burned) if detail.energy_burned is not None else None,
-                    distance_meters=float(detail.distance) if detail.distance is not None else None,
-                    avg_heart_rate_bpm=int(detail.heart_rate_avg) if detail.heart_rate_avg is not None else None,
-                    max_heart_rate_bpm=int(detail.heart_rate_max) if detail.heart_rate_max is not None else None,
-                    elevation_gain_meters=float(detail.total_elevation_gain)
-                    if detail.total_elevation_gain is not None
-                    else None,
-                    avg_pace_sec_per_km=avg_pace,
-                    exercises=detail.segments if provider == "hevy" else None,
-                )
+                if provider == "apple" and record.type == "strength_training":
+                    from app.integrations.celery.tasks.canonical_workout_task import (
+                        emit_apple_strength_workout_after_dedupe,
+                    )
+
+                    emit_apple_strength_workout_after_dedupe.apply_async(args=[str(record.id)], countdown=15)
+                    return
+                EventRecordService._emit_workout_webhook(record, data_source, detail)
 
     def bulk_create(
         self,
