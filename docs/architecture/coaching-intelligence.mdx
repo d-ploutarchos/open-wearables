@@ -40,3 +40,32 @@ Use `get_coaching_progress` for questions such as:
 - “Which lifts have stalled recently?”
 
 Exercise names are resolved to stable, provider-specific exercise identities. If multiple variants match, the tool asks the caller to select the intended exercise instead of merging unlike movements.
+
+## Training-load endpoint
+
+```http
+GET /api/v1/users/{user_id}/coaching/training-load
+```
+
+The default response compares the latest rolling 7 days with both the previous 7 days and the preceding 28-day baseline. `window_days` can be 3–28 days and `baseline_days` can be 14–180 days.
+
+The response intentionally keeps unlike measurements separate:
+
+- total workout duration in minutes
+- eligible external strength volume in kilograms
+- running distance in kilometers
+- primary-muscle work sets, sessions, and volume
+- sleep, recovery, readiness, resilience, body-battery, and strain score context when available
+
+Each workload metric includes current and previous values, a baseline normalized to the selected recent-window length, percentage change, and a `recent_to_baseline_ratio`. Direction labels are `no_load`, `new_load`, `below_baseline`, `within_baseline`, `above_baseline`, or `spike`.
+
+<Warning>
+  A workload ratio describes change in recorded training; it is not an injury-risk prediction. A health-score change is contextual and does not establish that training caused the change.
+</Warning>
+
+Use the MCP tool `get_training_load` for questions such as:
+
+- “How does this week compare with my normal training?”
+- “Did my running load spike?”
+- “Which muscle groups have I trained recently?”
+- “How does my recent sleep look alongside my workload?”

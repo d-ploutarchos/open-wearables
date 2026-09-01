@@ -12,6 +12,7 @@ MCP (Model Context Protocol) server for Open Wearables, enabling AI assistants l
 - **get_pr_history**: Query the chronological PR ledger
 - **get_strength_progress**: Analyze exercise-specific load, volume, reps, and estimated 1RM
 - **get_coaching_progress**: Read strength/running development, workload direction, and plateau signals
+- **get_training_load**: Compare recent training load, muscle exposure, and health-score context
 - **get_timeseries**: Get granular time-series samples (weight, SpO2, HRV, intraday heart rate, etc.)
 - **get_menstrual_cycles**: Get menstrual cycle records (cycle day, phase, period and cycle lengths)
 

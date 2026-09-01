@@ -72,6 +72,8 @@ Canonical workout history can be filtered by `start_datetime`, `end_datetime`, o
 
 The MCP server provides `list_canonical_workouts`, `get_canonical_workout`, `list_strength_exercises`, and `get_strength_progress`. Exercise variants remain separate unless a caller explicitly selects the intended stable exercise ID. Estimated one-repetition maximum uses the Epley formula and is labelled as an estimate.
 
+Open Wearables also syncs Hevy exercise-template metadata on a six-hour cache. The template's equipment category and primary muscle group enrich the stable exercise definition, enabling source-backed muscle-group exposure in `get_training_load`. Template enrichment is best-effort and never blocks workout ingestion.
+
 ## Strength performance records
 
 Open Wearables derives versioned performance efforts from positive-load, positive-repetition working sets. Warm-up sets are excluded. The first algorithm version manages four record types:

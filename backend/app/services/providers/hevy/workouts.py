@@ -1,7 +1,9 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
+import httpx
 from sqlalchemy import delete
 
 from app.database import DbSession
@@ -10,14 +12,22 @@ from app.repositories.event_record_repository import EventRecordRepository
 from app.repositories.user_connection_repository import UserConnectionRepository
 from app.schemas.enums import WorkoutType
 from app.schemas.model_crud.activities import EventRecordCreate, EventRecordDetailCreate
-from app.schemas.providers.hevy import HevyWorkout, HevyWorkoutEventsPage, HevyWorkoutPage
+from app.schemas.providers.hevy import (
+    HevyExerciseTemplate,
+    HevyExerciseTemplatePage,
+    HevyWorkout,
+    HevyWorkoutEventsPage,
+    HevyWorkoutPage,
+)
 from app.services.canonical_workout_service import canonical_workout_service
 from app.services.event_record_service import event_record_service
 from app.services.raw_payload_storage import store_raw_payload
 from app.utils.provider_credentials import decrypt_provider_credential
 
 from .client import HevyClient
-from .strength_storage import replace_strength_details, workout_segments
+from .strength_storage import enrich_exercise_definitions, replace_strength_details, workout_segments
+
+logger = logging.getLogger(__name__)
 
 
 class HevyWorkouts:
@@ -27,6 +37,7 @@ class HevyWorkouts:
         self.client = HevyClient()
         self.connection_repo = UserConnectionRepository()
         self.workout_repo = EventRecordRepository(EventRecord)
+        self._template_cache: dict[UUID, tuple[datetime, dict[str, HevyExerciseTemplate]]] = {}
 
     def _credentials(self, db: DbSession, user_id: UUID) -> tuple[str, UUID]:
         connection = self.connection_repo.get_active_connection(db, user_id, "hevy")
@@ -76,6 +87,43 @@ class HevyWorkouts:
             page += 1
         return workouts
 
+    def get_exercise_templates(self, db: DbSession, user_id: UUID) -> dict[str, HevyExerciseTemplate]:
+        cached = self._template_cache.get(user_id)
+        now = datetime.now(timezone.utc)
+        if cached is not None and now - cached[0] < timedelta(hours=6):
+            return cached[1]
+        api_key, _ = self._credentials(db, user_id)
+        templates: dict[str, HevyExerciseTemplate] = {}
+        page = 1
+        while True:
+            payload = self.client.request(
+                api_key,
+                "/v1/exercise_templates",
+                params={"page": page, "pageSize": 100},
+            )
+            parsed = HevyExerciseTemplatePage.model_validate(payload)
+            templates.update((item.id, item) for item in parsed.exercise_templates)
+            if not parsed.exercise_templates or (parsed.page_count is not None and page >= parsed.page_count):
+                break
+            page += 1
+        self._template_cache[user_id] = (now, templates)
+        return templates
+
+    def exercise_templates_or_empty(self, db: DbSession, user_id: UUID) -> dict[str, HevyExerciseTemplate]:
+        """Keep workout ingestion available if optional template enrichment fails."""
+        try:
+            return self.get_exercise_templates(db, user_id)
+        except (ValueError, httpx.HTTPError) as exc:
+            logger.warning("Hevy exercise-template enrichment unavailable: %s", exc)
+            return {}
+
+    def sync_exercise_definition_metadata(self, db: DbSession, user_id: UUID) -> dict[str, HevyExerciseTemplate]:
+        templates = self.exercise_templates_or_empty(db, user_id)
+        if templates:
+            enrich_exercise_definitions(db, user_id, templates)
+            db.commit()
+        return templates
+
     def _normalize_workout(
         self,
         workout: HevyWorkout,
@@ -102,13 +150,22 @@ class HevyWorkouts:
         detail = EventRecordDetailCreate(record_id=record_id, segments=workout_segments(workout))
         return record, detail
 
-    def ingest_workout(self, db: DbSession, user_id: UUID, workout: HevyWorkout) -> tuple[UUID, bool]:
+    def ingest_workout(
+        self,
+        db: DbSession,
+        user_id: UUID,
+        workout: HevyWorkout,
+        exercise_templates: dict[str, HevyExerciseTemplate] | None = None,
+    ) -> tuple[UUID, bool]:
         _, connection_id = self._credentials(db, user_id)
+        templates = (
+            exercise_templates if exercise_templates is not None else self.exercise_templates_or_empty(db, user_id)
+        )
         record, detail = self._normalize_workout(workout, user_id, connection_id)
         existing = self.workout_repo.get_by_external_id(db, user_id, workout.id, provider="hevy")
 
         if existing is not None:
-            self._replace_existing(db, user_id, existing, record, detail, workout)
+            self._replace_existing(db, user_id, existing, record, detail, workout, templates)
             canonical_workout_service.ensure_for_record(db, existing.id)
             return existing.id, False
 
@@ -116,10 +173,10 @@ class HevyWorkouts:
         if created.id != record.id:
             # Another webhook worker inserted the same provider workout between our
             # external-id lookup and INSERT. Update it without emitting a second event.
-            self._replace_existing(db, user_id, created, record, detail, workout)
+            self._replace_existing(db, user_id, created, record, detail, workout, templates)
             canonical_workout_service.ensure_for_record(db, created.id)
             return created.id, False
-        replace_strength_details(db, user_id, created.id, workout)
+        replace_strength_details(db, user_id, created.id, workout, templates)
         event_record_service.create_detail(db, detail.model_copy(update={"record_id": created.id}))
         canonical_workout_service.ensure_for_record(db, created.id)
         return created.id, True
@@ -132,6 +189,7 @@ class HevyWorkouts:
         record: EventRecordCreate,
         detail: EventRecordDetailCreate,
         workout: HevyWorkout,
+        exercise_templates: dict[str, HevyExerciseTemplate],
     ) -> None:
         existing.source_name = record.source_name
         existing.type = record.type
@@ -139,7 +197,7 @@ class HevyWorkouts:
         existing.end_datetime = record.end_datetime
         existing.duration_seconds = record.duration_seconds
         db.execute(delete(WorkoutDetails).where(WorkoutDetails.record_id == existing.id))
-        replace_strength_details(db, user_id, existing.id, workout)
+        replace_strength_details(db, user_id, existing.id, workout, exercise_templates)
         db.add(WorkoutDetails(record_id=existing.id, segments=detail.segments))
         db.commit()
 
@@ -152,11 +210,12 @@ class HevyWorkouts:
         start_dt = self._coerce_datetime(start, datetime.now(timezone.utc) - timedelta(days=90))
         end_dt = self._coerce_datetime(end, datetime.now(timezone.utc))
         count = 0
+        exercise_templates = self.sync_exercise_definition_metadata(db, user_id)
         # Hevy's events endpoint only reports updates and deletes. New workouts
         # are normally announced by webhook, so a recovery pull must also scan
         # the workout list or a missed webhook would leave the workout absent.
         for workout in self.get_workouts(db, user_id, start_dt - timedelta(minutes=5), end_dt):
-            self.ingest_workout(db, user_id, workout)
+            self.ingest_workout(db, user_id, workout, exercise_templates)
             count += 1
         if start_dt.year > 1970:
             count += self.reconcile_events(db, user_id, start_dt - timedelta(minutes=5))

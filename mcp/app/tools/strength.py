@@ -115,6 +115,29 @@ async def get_coaching_progress(
 
 
 @strength_router.tool
+async def get_training_load(
+    user_id: str,
+    window_days: int = 7,
+    baseline_days: int = 28,
+) -> dict:
+    """Compare recent multimodal training load with prior and baseline periods.
+
+    Returns workout duration, external strength volume, running distance, muscle-group exposure,
+    and recent sleep/recovery health-score context. Ratios describe workload changes and must not
+    be presented as injury predictions or causal effects.
+    """
+    try:
+        return await client.get_training_load(
+            user_id,
+            window_days=window_days,
+            baseline_days=baseline_days,
+        )
+    except OpenWearablesError as exc:
+        logger.error("API error in get_training_load: %s", exc)
+        return {"error": str(exc), "metrics": [], "muscle_groups": [], "health_scores": []}
+
+
+@strength_router.tool
 async def list_canonical_workouts(
     user_id: str,
     start_date: str | None = None,

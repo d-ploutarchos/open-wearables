@@ -6,6 +6,7 @@ from app.tools.strength import (
     get_personal_records,
     get_pr_history,
     get_strength_progress,
+    get_training_load,
     list_canonical_workouts,
     list_strength_exercises,
 )
@@ -100,6 +101,22 @@ async def test_get_coaching_progress_resolves_exercise_and_passes_thresholds(htt
 
     assert result["strength"][0]["status"] == "progressing"
     assert result["running"][0]["distance_meters"] == 5000
+
+
+async def test_get_training_load_passes_windows(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=(f"https://api.test.com/api/v1/users/{USER_ID}/coaching/training-load?window_days=10&baseline_days=40"),
+        json={
+            "metrics": [{"metric": "running_distance", "direction": "within_baseline"}],
+            "muscle_groups": [],
+            "health_scores": [],
+        },
+    )
+
+    result = await get_training_load(USER_ID, window_days=10, baseline_days=40)
+
+    assert result["metrics"][0]["metric"] == "running_distance"
 
 
 async def test_get_canonical_workout_returns_merged_payload(httpx_mock: HTTPXMock) -> None:

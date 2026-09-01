@@ -43,6 +43,22 @@ class HevyWorkoutPage(BaseModel):
     workouts: list[HevyWorkout] = Field(default_factory=list)
 
 
+class HevyExerciseTemplate(BaseModel):
+    id: str
+    title: str
+    type: str | None = None
+    primary_muscle_group: str | None = None
+    secondary_muscle_groups: list[str] = Field(default_factory=list)
+    equipment_category: str | None = None
+    is_custom: bool = False
+
+
+class HevyExerciseTemplatePage(BaseModel):
+    page: int | None = None
+    page_count: int | None = None
+    exercise_templates: list[HevyExerciseTemplate] = Field(default_factory=list)
+
+
 class HevyWorkoutEvent(BaseModel):
     type: str
     workout: HevyWorkout | None = None

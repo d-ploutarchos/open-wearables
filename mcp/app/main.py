@@ -41,6 +41,7 @@ mcp = FastMCP(
     - list_strength_exercises: Resolve exact strength exercise identities and variants
     - get_strength_progress: Analyze load, volume, repetitions, and estimated 1RM over time
     - get_coaching_progress: Read coach-ready strength/running trends and plateau signals
+    - get_training_load: Compare recent training duration, strength volume, running distance, and recovery context
     - get_canonical_workout: Read one physical workout merged across structural and physiological sources
     - list_canonical_workouts: Search merged workout history by date, workout name, or exercise name
     - get_personal_records: Read current provider-neutral strength or running PRs
@@ -69,6 +70,8 @@ mcp = FastMCP(
     - For a running distance, pass distance_meters (for example 5000 for 5K).
     - Use get_strength_progress for longitudinal set-derived exercise analysis, not get_workout_events.
     - For progression, plateau, trend, or "how am I developing?" questions, call get_coaching_progress first.
+    - For fatigue, training balance, workload spikes, muscle exposure, or recovery-context questions,
+      call get_training_load.
 
     Example interaction:
     User: "How many steps did I take this week?"

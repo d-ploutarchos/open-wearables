@@ -7,11 +7,39 @@ from sqlalchemy import delete, select
 from app.database import DbSession
 from app.models import ExerciseDefinition, ExerciseSet, WorkoutExercise
 from app.schemas.enums import ProviderName
-from app.schemas.providers.hevy import HevyWorkout
+from app.schemas.providers.hevy import HevyExerciseTemplate, HevyWorkout
 
 
 def normalize_exercise_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def _apply_template(definition: ExerciseDefinition, template: HevyExerciseTemplate) -> None:
+    definition.equipment = template.equipment_category
+    definition.primary_muscle_group = template.primary_muscle_group
+    definition.is_custom = template.is_custom
+
+
+def enrich_exercise_definitions(
+    db: DbSession,
+    user_id: UUID,
+    exercise_templates: dict[str, HevyExerciseTemplate],
+) -> int:
+    definitions = db.scalars(
+        select(ExerciseDefinition).where(
+            ExerciseDefinition.user_id == user_id,
+            ExerciseDefinition.provider == ProviderName.HEVY,
+        )
+    ).all()
+    updated = 0
+    for definition in definitions:
+        template = exercise_templates.get(definition.provider_exercise_id)
+        if template is None:
+            continue
+        _apply_template(definition, template)
+        updated += 1
+    db.flush()
+    return updated
 
 
 def _definition_for(
@@ -19,6 +47,7 @@ def _definition_for(
     user_id: UUID,
     provider_exercise_id: str,
     title: str,
+    template: HevyExerciseTemplate | None = None,
 ) -> ExerciseDefinition:
     definition = db.scalar(
         select(ExerciseDefinition).where(
@@ -35,15 +64,17 @@ def _definition_for(
             provider_exercise_id=provider_exercise_id,
             name=title,
             normalized_name=normalize_exercise_name(title),
-            equipment=None,
-            primary_muscle_group=None,
-            is_custom=False,
+            equipment=template.equipment_category if template else None,
+            primary_muscle_group=template.primary_muscle_group if template else None,
+            is_custom=template.is_custom if template else False,
         )
         db.add(definition)
         db.flush()
     elif definition.name != title:
         definition.name = title
         definition.normalized_name = normalize_exercise_name(title)
+    if template is not None:
+        _apply_template(definition, template)
     return definition
 
 
@@ -52,6 +83,7 @@ def replace_strength_details(
     user_id: UUID,
     record_id: UUID,
     workout: HevyWorkout,
+    exercise_templates: dict[str, HevyExerciseTemplate] | None = None,
 ) -> None:
     """Replace the queryable exercise tree for an idempotent workout upsert."""
     db.execute(delete(WorkoutExercise).where(WorkoutExercise.record_id == record_id))
@@ -63,6 +95,7 @@ def replace_strength_details(
             user_id,
             exercise.exercise_template_id,
             exercise.title,
+            (exercise_templates or {}).get(exercise.exercise_template_id),
         )
         occurrence = WorkoutExercise(
             id=uuid4(),

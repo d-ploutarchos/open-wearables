@@ -338,6 +338,20 @@ class OpenWearablesClient:
         )
         return cast(dict[str, Any], response)
 
+    async def get_training_load(
+        self,
+        user_id: str,
+        *,
+        window_days: int = 7,
+        baseline_days: int = 28,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "GET",
+            f"/api/v1/users/{user_id}/coaching/training-load",
+            params={"window_days": window_days, "baseline_days": baseline_days},
+        )
+        return cast(dict[str, Any], response)
+
     async def list_performance_record_history(
         self,
         user_id: str,

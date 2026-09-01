@@ -9,11 +9,30 @@ from app.schemas.performance_records import (
     PerformanceRecordHistoryResponse,
     PerformanceRecordResponse,
 )
+from app.schemas.training_load import TrainingLoadResponse
 from app.services import ApiKeyDep
 from app.services.coaching_progress_service import coaching_progress_service
 from app.services.performance_record_service import performance_record_service
+from app.services.training_load_service import training_load_service
 
 router = APIRouter()
+
+
+@router.get("/users/{user_id}/coaching/training-load")
+def get_training_load(
+    user_id: UUID,
+    db: DbSession,
+    _api_key: ApiKeyDep,
+    window_days: Annotated[int, Query(ge=3, le=28)] = 7,
+    baseline_days: Annotated[int, Query(ge=14, le=180)] = 28,
+) -> TrainingLoadResponse:
+    """Compare recent training load with the prior period and preceding baseline."""
+    return training_load_service.get_training_load(
+        db,
+        user_id,
+        window_days=window_days,
+        baseline_days=baseline_days,
+    )
 
 
 @router.get("/users/{user_id}/coaching/progress")
