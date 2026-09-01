@@ -21,7 +21,9 @@ curl --request POST \
   --data '{"api_key":"newly-rotated-hevy-api-key"}'
 ```
 
-Open Wearables validates the key against Hevy, encrypts it at rest, starts a historical backfill, and returns a connection-specific webhook URL and one-time authorization value. Never put a Hevy API key in source control, logs, or an outgoing webhook.
+Open Wearables validates the key against Hevy, encrypts it at rest, starts a historical backfill, and returns a connection-specific webhook URL and one-time authorization value. The webhook URL is derived from the public host used by Bionic rather than a local deployment default. Never put a Hevy API key in source control, logs, or an outgoing webhook.
+
+The connection backfill establishes `last_synced_at` when it completes. Users can repeat the idempotent full import with `POST /api/v1/sdk/users/{user_id}/connections/hevy/sync` or the **Sync workout history** button in Bionic.
 
 Set `PROVIDER_CREDENTIALS_KEY` to a stable, long random passphrase in every API and worker environment. If omitted, credential encryption derives its key from `SECRET_KEY`.
 

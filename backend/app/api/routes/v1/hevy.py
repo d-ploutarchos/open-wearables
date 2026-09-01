@@ -4,9 +4,8 @@ from uuid import UUID, uuid4
 
 import httpx
 from celery import current_app as celery_app
-from fastapi import APIRouter, Header, HTTPException, Response, status
+from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 
-from app.config import settings
 from app.database import DbSession
 from app.models import UserConnection
 from app.repositories.user_connection_repository import UserConnectionRepository
@@ -15,6 +14,7 @@ from app.schemas.providers.hevy import (
     HevyConnectionRequest,
     HevyConnectionResponse,
     HevyConnectionStatus,
+    HevySyncResponse,
     HevyWebhookPayload,
 )
 from app.services.providers.hevy.client import HevyClient
@@ -36,14 +36,30 @@ def _authorize_user(auth: SDKAuthDep, user_id: UUID) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token does not match user_id")
 
 
-def _webhook_url(connection_id: UUID) -> str:
-    return f"{settings.api_base_url.rstrip('/')}{settings.api_v1}/hevy/webhooks/{connection_id}"
+def _webhook_url(request: Request, connection_id: UUID) -> str:
+    """Build the callback from the public host that the mobile client used."""
+    return str(request.url_for("receive_hevy_webhook", connection_id=str(connection_id)))
+
+
+def _queue_full_sync(user_id: UUID, requested_at: datetime) -> None:
+    celery_app.send_task(
+        "app.integrations.celery.tasks.sync_vendor_data_task.sync_vendor_data",
+        kwargs={
+            "user_id": str(user_id),
+            "start_date": "1970-01-01T00:00:00+00:00",
+            "end_date": requested_at.isoformat(),
+            "providers": ["hevy"],
+            # A connection backfill establishes the live cursor when it succeeds.
+            "is_historical": False,
+        },
+    )
 
 
 @router.post("/sdk/users/{user_id}/connections/hevy")
 def connect_hevy(
     user_id: UUID,
     payload: HevyConnectionRequest,
+    request: Request,
     db: DbSession,
     auth: SDKAuthDep,
 ) -> HevyConnectionResponse:
@@ -98,21 +114,12 @@ def connect_hevy(
     db.commit()
     db.refresh(connection)
 
-    celery_app.send_task(
-        "app.integrations.celery.tasks.sync_vendor_data_task.sync_vendor_data",
-        kwargs={
-            "user_id": str(user_id),
-            "start_date": "1970-01-01T00:00:00+00:00",
-            "end_date": now.isoformat(),
-            "providers": ["hevy"],
-            "is_historical": True,
-        },
-    )
+    _queue_full_sync(user_id, now)
     return HevyConnectionResponse(
         connection_id=connection.id,
         provider_user_id=provider_user_id,
         provider_username=connection.provider_username,
-        webhook_url=_webhook_url(connection.id),
+        webhook_url=_webhook_url(request, connection.id),
         webhook_authorization=f"Bearer {secret}",
         connected_at=connection.created_at,
         last_synced_at=connection.last_synced_at,
@@ -121,7 +128,7 @@ def connect_hevy(
 
 
 @router.get("/sdk/users/{user_id}/connections/hevy")
-def get_hevy_connection(user_id: UUID, db: DbSession, auth: SDKAuthDep) -> HevyConnectionStatus:
+def get_hevy_connection(user_id: UUID, request: Request, db: DbSession, auth: SDKAuthDep) -> HevyConnectionStatus:
     _authorize_user(auth, user_id)
     connection = connection_repo.get_active_connection(db, user_id, "hevy")
     if connection is None:
@@ -130,7 +137,7 @@ def get_hevy_connection(user_id: UUID, db: DbSession, auth: SDKAuthDep) -> HevyC
         connected=True,
         connection_id=connection.id,
         provider_username=connection.provider_username,
-        webhook_url=_webhook_url(connection.id),
+        webhook_url=_webhook_url(request, connection.id),
         last_synced_at=connection.last_synced_at,
         last_webhook_at=connection.last_webhook_at,
     )
@@ -139,6 +146,7 @@ def get_hevy_connection(user_id: UUID, db: DbSession, auth: SDKAuthDep) -> HevyC
 @router.post("/sdk/users/{user_id}/connections/hevy/webhook-secret")
 def rotate_hevy_webhook_secret(
     user_id: UUID,
+    request: Request,
     db: DbSession,
     auth: SDKAuthDep,
 ) -> HevyConnectionResponse:
@@ -157,12 +165,26 @@ def rotate_hevy_webhook_secret(
         connection_id=connection.id,
         provider_user_id=connection.provider_user_id,
         provider_username=connection.provider_username,
-        webhook_url=_webhook_url(connection.id),
+        webhook_url=_webhook_url(request, connection.id),
         webhook_authorization=f"Bearer {secret}",
         connected_at=connection.created_at,
         last_synced_at=connection.last_synced_at,
         last_webhook_at=connection.last_webhook_at,
     )
+
+
+@router.post(
+    "/sdk/users/{user_id}/connections/hevy/sync",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def sync_hevy_history(user_id: UUID, db: DbSession, auth: SDKAuthDep) -> HevySyncResponse:
+    """Queue an idempotent full workout-history sync and establish the live cursor."""
+    _authorize_user(auth, user_id)
+    if connection_repo.get_active_connection(db, user_id, "hevy") is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hevy is not connected")
+    requested_at = datetime.now(timezone.utc)
+    _queue_full_sync(user_id, requested_at)
+    return HevySyncResponse(status="accepted", requested_at=requested_at)
 
 
 @router.delete("/sdk/users/{user_id}/connections/hevy", status_code=status.HTTP_204_NO_CONTENT)

@@ -200,6 +200,7 @@
               "POST /api/v1/sdk/users/{user_id}/connections/hevy",
               "GET /api/v1/sdk/users/{user_id}/connections/hevy",
               "POST /api/v1/sdk/users/{user_id}/connections/hevy/webhook-secret",
+              "POST /api/v1/sdk/users/{user_id}/connections/hevy/sync",
               "DELETE /api/v1/sdk/users/{user_id}/connections/hevy",
               "POST /api/v1/hevy/webhooks/{connection_id}"
             ]

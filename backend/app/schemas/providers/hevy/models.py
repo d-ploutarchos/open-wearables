@@ -86,6 +86,11 @@ class HevyConnectionStatus(BaseModel):
     last_webhook_at: datetime | None = None
 
 
+class HevySyncResponse(BaseModel):
+    status: str
+    requested_at: datetime
+
+
 class HevyExerciseHistoryPoint(BaseModel):
     workout_id: UUID
     performed_at: datetime
