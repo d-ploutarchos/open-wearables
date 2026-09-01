@@ -76,6 +76,7 @@ class TestWebhookEmit:
             provider="garmin",
             device="Forerunner 255",
             workout_type="RUNNING",
+            workout_name="Morning Run",
             start_time="2026-01-01T00:00:00",
             end_time="2026-01-01T01:00:00",
             zone_offset="+01:00",
@@ -94,6 +95,33 @@ class TestWebhookEmit:
         assert args[0][1]["data"]["calories_kcal"] == 450.0
         assert args[0][1]["data"]["distance_meters"] == 10000.0
         assert args[0][1]["data"]["avg_heart_rate_bpm"] == 155
+
+    @patch("app.integrations.celery.tasks.emit_webhook_event_task.emit_webhook_event")
+    def test_on_hevy_workout_created_includes_exercises(self, mock_task: MagicMock) -> None:
+        exercises = [
+            {
+                "title": "Back Squat",
+                "exercise_template_id": "squat-template",
+                "sets": [{"index": 0, "type": "normal", "weight_kg": "100", "reps": 5}],
+            }
+        ]
+        on_workout_created(
+            record_id=uuid4(),
+            user_id=uuid4(),
+            provider="hevy",
+            device="Hevy",
+            workout_type="strength_training",
+            workout_name="Lower Body",
+            start_time="2026-09-01T16:00:00Z",
+            end_time="2026-09-01T17:00:00Z",
+            zone_offset=None,
+            duration_seconds=3600,
+            exercises=exercises,
+        )
+
+        payload = mock_task.delay.call_args.args[1]
+        assert payload["data"]["name"] == "Lower Body"
+        assert payload["data"]["exercises"] == exercises
 
     @patch("app.integrations.celery.tasks.emit_webhook_event_task.emit_webhook_event")
     def test_on_sleep_created_dispatches(self, mock_task: MagicMock) -> None:

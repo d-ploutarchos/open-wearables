@@ -65,6 +65,7 @@ def on_workout_created(
     provider: str,
     device: str | None,
     workout_type: str | None,
+    workout_name: str | None,
     start_time: str,
     end_time: str,
     zone_offset: str | None,
@@ -75,6 +76,7 @@ def on_workout_created(
     max_heart_rate_bpm: int | None = None,
     elevation_gain_meters: float | None = None,
     avg_pace_sec_per_km: int | None = None,
+    exercises: list[dict[str, Any]] | None = None,
 ) -> None:
     _dispatch(
         WebhookEventType.WORKOUT_CREATED,
@@ -84,6 +86,7 @@ def on_workout_created(
                 "id": str(record_id),
                 "user_id": str(user_id),
                 "type": workout_type,
+                "name": workout_name,
                 "start_time": start_time,
                 "end_time": end_time,
                 "zone_offset": zone_offset,
@@ -95,6 +98,7 @@ def on_workout_created(
                 "max_heart_rate_bpm": max_heart_rate_bpm,
                 "avg_pace_sec_per_km": avg_pace_sec_per_km,
                 "elevation_gain_meters": elevation_gain_meters,
+                "exercises": exercises,
             },
         },
         idempotency_key=f"workout.created.{record_id}",

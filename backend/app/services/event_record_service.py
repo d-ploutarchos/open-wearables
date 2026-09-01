@@ -517,7 +517,7 @@ class EventRecordService(
         if not svix_service.is_enabled():
             return
         category = (record.category or "").lower()
-        provider = str(data_source.provider)
+        provider = getattr(data_source.provider, "value", str(data_source.provider))
         device = data_source.device_model
         zone_offset = record.zone_offset
         match category:
@@ -577,6 +577,7 @@ class EventRecordService(
                     provider=provider,
                     device=device,
                     workout_type=record.type,
+                    workout_name=record.source_name,
                     start_time=record.start_datetime.isoformat(),
                     end_time=record.end_datetime.isoformat(),
                     zone_offset=zone_offset,
@@ -589,6 +590,7 @@ class EventRecordService(
                     if detail.total_elevation_gain is not None
                     else None,
                     avg_pace_sec_per_km=avg_pace,
+                    exercises=detail.segments if provider == "hevy" else None,
                 )
 
     def bulk_create(
