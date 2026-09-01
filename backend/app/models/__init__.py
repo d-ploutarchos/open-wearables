@@ -20,6 +20,7 @@ from .personal_record import PersonalRecord
 from .provider_priority import ProviderPriority
 from .provider_setting import ProviderSetting
 from .refresh_token import RefreshToken
+from .running_effort import RunningEffort
 from .series_type_definition import SeriesTypeDefinition
 from .sleep_details import SleepDetails
 from .strength_effort import StrengthEffort
@@ -50,6 +51,7 @@ __all__ = [
     "ProviderPriority",
     "ProviderSetting",
     "RefreshToken",
+    "RunningEffort",
     "User",
     "UserConnection",
     "UserInvitationCode",

@@ -18,18 +18,20 @@ async def get_personal_records(
     user_id: str,
     sport: str = "strength",
     exercise_id: str | None = None,
+    distance_meters: int | None = None,
     record_type: str | None = None,
 ) -> dict:
-    """Get current athletic PRs, including max load, exact-rep max, estimated 1RM, and set volume.
+    """Get current provider-neutral strength or running PRs.
 
-    These are provider-neutral performance records, not the demographic profile historically
-    called a personal record by the Open Wearables data model.
+    Strength records include load, exact-rep max, estimated 1RM, and set volume. Running
+    records use sport="running" and optionally distance_meters for standard-distance best times.
     """
     try:
         records = await client.list_performance_records(
             user_id,
             sport=sport,
             exercise_id=exercise_id,
+            distance_meters=distance_meters,
             record_type=record_type,
         )
         return {"user_id": user_id, "sport": sport, "records": records, "total": len(records)}
@@ -40,15 +42,19 @@ async def get_personal_records(
 @strength_router.tool
 async def get_pr_history(
     user_id: str,
+    sport: str | None = None,
     exercise_id: str | None = None,
+    distance_meters: int | None = None,
     record_type: str | None = None,
     limit: int = 100,
 ) -> dict:
-    """Get the chronological ledger of strength PRs, corrections, restorations, and revocations."""
+    """Get the chronological ledger of strength or running PR changes."""
     try:
         history = await client.list_performance_record_history(
             user_id,
+            sport=sport,
             exercise_id=exercise_id,
+            distance_meters=distance_meters,
             record_type=record_type,
             limit=limit,
         )

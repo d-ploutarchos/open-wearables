@@ -163,8 +163,20 @@ def create_celery() -> Celery:
             "args": (),
             "kwargs": {},
         },
+        "backfill-canonical-running-workouts": {
+            "task": "app.integrations.celery.tasks.canonical_workout_task.backfill_canonical_running_workouts",
+            "schedule": 300.0,
+            "args": (),
+            "kwargs": {},
+        },
         "backfill-strength-performance-records": {
             "task": "app.integrations.celery.tasks.performance_record_task.backfill_strength_performance_records",
+            "schedule": 300.0,
+            "args": (),
+            "kwargs": {},
+        },
+        "backfill-running-performance-records": {
+            "task": "app.integrations.celery.tasks.performance_record_task.backfill_running_performance_records",
             "schedule": 300.0,
             "args": (),
             "kwargs": {},

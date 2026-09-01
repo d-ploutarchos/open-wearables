@@ -38,6 +38,22 @@ async def test_get_personal_records_returns_strength_prs(httpx_mock: HTTPXMock) 
     assert result["records"][0]["record_type"] == "estimated_one_rep_max"
 
 
+async def test_get_personal_records_filters_running_distance(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=(
+            f"https://api.test.com/api/v1/users/{USER_ID}/performance-records"
+            "?include_inactive=false&sport=running&distance_meters=5000"
+        ),
+        json=[{"sport": "running", "record_type": "fastest_time", "distance_meters": 5000, "value": "1425"}],
+    )
+
+    result = await get_personal_records(USER_ID, sport="running", distance_meters=5000)
+
+    assert result["total"] == 1
+    assert result["records"][0]["value"] == "1425"
+
+
 async def test_get_pr_history_passes_filters(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(
         method="GET",

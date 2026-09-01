@@ -46,7 +46,7 @@ class CanonicalWorkoutService:
         if context is None:
             return None
         record, data_source, _ = context
-        if record.category != "workout" or record.type != "strength_training":
+        if record.category != "workout" or record.type not in {"strength_training", "running"}:
             return None
 
         overlapping_canonical = self.repository.find_overlapping_canonical(
@@ -93,7 +93,13 @@ class CanonicalWorkoutService:
 
     @staticmethod
     def _primary(contexts: list[WorkoutContext]) -> WorkoutContext:
-        return next((item for item in contexts if CanonicalWorkoutService._provider(item[1]) == "hevy"), contexts[0])
+        for preferred_provider in ("hevy", "apple"):
+            if preferred := next(
+                (item for item in contexts if CanonicalWorkoutService._provider(item[1]) == preferred_provider),
+                None,
+            ):
+                return preferred
+        return contexts[0]
 
     @staticmethod
     def _first_detail(
@@ -214,6 +220,26 @@ class CanonicalWorkoutService:
     ) -> tuple[int, int]:
         record_ids = self.repository.list_unlinked_strength_record_ids(
             db,
+            user_id=user_id,
+            start_datetime=start_datetime,
+            limit=limit,
+        )
+        canonical_ids = {
+            canonical.id for record_id in record_ids if (canonical := self.ensure_for_record(db, record_id)) is not None
+        }
+        return len(record_ids), len(canonical_ids)
+
+    def backfill_running(
+        self,
+        db: DbSession,
+        *,
+        user_id: UUID | None = None,
+        start_datetime: datetime | None = None,
+        limit: int = 500,
+    ) -> tuple[int, int]:
+        record_ids = self.repository.list_unlinked_record_ids(
+            db,
+            workout_type="running",
             user_id=user_id,
             start_datetime=start_datetime,
             limit=limit,

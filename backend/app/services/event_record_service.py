@@ -603,6 +603,20 @@ class EventRecordService(
                     pregnancy_snapshot=mcd.pregnancy_snapshot if mcd else None,
                 )
             case "workout":
+                if record.type == "running":
+                    try:
+                        celery_app.send_task(
+                            "app.integrations.celery.tasks.canonical_workout_task.emit_canonical_running_workout",
+                            args=[str(record.id)],
+                            countdown=10,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Could not enqueue canonical running workout event %s",
+                            record.id,
+                            exc_info=True,
+                        )
+                    return
                 if provider in {"apple", "hevy"} and record.type == "strength_training":
                     countdown = 5 if provider == "hevy" else 15
                     try:

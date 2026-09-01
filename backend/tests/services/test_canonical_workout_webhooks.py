@@ -71,6 +71,27 @@ def test_hevy_strength_webhook_uses_same_canonical_task() -> None:
     emitted.assert_not_called()
 
 
+def test_running_webhook_is_delayed_for_pr_analysis() -> None:
+    record_id = uuid4()
+    record = MagicMock(id=record_id, category="workout", type="running")
+    data_source = MagicMock(provider=ProviderName.APPLE)
+    detail = EventRecordDetailCreate(record_id=record_id, distance=Decimal("5000"))
+
+    with (
+        patch("app.services.event_record_service.svix_service.is_enabled", return_value=True),
+        patch("app.services.event_record_service.celery_app.send_task") as delayed,
+        patch("app.services.event_record_service.on_workout_created") as emitted,
+    ):
+        EventRecordService._emit_event_record_webhook(record, data_source, detail)
+
+    delayed.assert_called_once_with(
+        "app.integrations.celery.tasks.canonical_workout_task.emit_canonical_running_workout",
+        args=[str(record_id)],
+        countdown=10,
+    )
+    emitted.assert_not_called()
+
+
 def test_canonical_enqueue_failure_does_not_break_ingestion() -> None:
     record = MagicMock(id=uuid4(), category="workout", type="strength_training")
     data_source = MagicMock(provider=ProviderName.HEVY)

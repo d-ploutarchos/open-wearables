@@ -27,14 +27,12 @@ class PerformanceRecord(BaseDbModel):
         ForeignKey("exercise_definition.id", ondelete="SET NULL")
     )
     repetition_count: Mapped[int | None]
+    distance_meters: Mapped[int | None]
     value: Mapped[Decimal] = mapped_column(Numeric(12, 3))
     unit: Mapped[str_32]
-    strength_effort_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("strength_effort.id", ondelete="SET NULL")
-    )
-    canonical_workout_id: Mapped[UUID] = mapped_column(
-        ForeignKey("canonical_workout.id", ondelete="CASCADE")
-    )
+    strength_effort_id: Mapped[UUID | None] = mapped_column(ForeignKey("strength_effort.id", ondelete="SET NULL"))
+    running_effort_id: Mapped[UUID | None] = mapped_column(ForeignKey("running_effort.id", ondelete="SET NULL"))
+    canonical_workout_id: Mapped[UUID] = mapped_column(ForeignKey("canonical_workout.id", ondelete="CASCADE"))
     achieved_at: Mapped[datetime]
     algorithm_version: Mapped[str_32]
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
@@ -45,20 +43,13 @@ class PerformanceRecordHistory(BaseDbModel):
     """Append-only sequence of changes to a current performance record."""
 
     __tablename__ = "performance_record_history"
-    __table_args__ = (
-        Index("ix_performance_record_history_record_achieved", "performance_record_id", "achieved_at"),
-    )
+    __table_args__ = (Index("ix_performance_record_history_record_achieved", "performance_record_id", "achieved_at"),)
 
     id: Mapped[PrimaryKey[UUID]]
-    performance_record_id: Mapped[UUID] = mapped_column(
-        ForeignKey("performance_record.id", ondelete="CASCADE")
-    )
-    strength_effort_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("strength_effort.id", ondelete="SET NULL")
-    )
-    canonical_workout_id: Mapped[UUID] = mapped_column(
-        ForeignKey("canonical_workout.id", ondelete="CASCADE")
-    )
+    performance_record_id: Mapped[UUID] = mapped_column(ForeignKey("performance_record.id", ondelete="CASCADE"))
+    strength_effort_id: Mapped[UUID | None] = mapped_column(ForeignKey("strength_effort.id", ondelete="SET NULL"))
+    running_effort_id: Mapped[UUID | None] = mapped_column(ForeignKey("running_effort.id", ondelete="SET NULL"))
+    canonical_workout_id: Mapped[UUID] = mapped_column(ForeignKey("canonical_workout.id", ondelete="CASCADE"))
     value: Mapped[Decimal] = mapped_column(Numeric(12, 3))
     previous_value: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))
     achieved_at: Mapped[datetime]

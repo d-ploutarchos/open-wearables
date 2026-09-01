@@ -13,13 +13,19 @@ class PerformanceRecordResponse(BaseModel):
     exercise_id: UUID | None = None
     exercise_name: str | None = None
     repetition_count: int | None = None
+    distance_meters: int | None = None
     value: Decimal
     unit: str
     achieved_at: datetime
     canonical_workout_id: UUID
     source_effort_id: UUID | None = None
+    source_running_effort_id: UUID | None = None
     source_load_kg: Decimal | None = None
     source_repetitions: int | None = None
+    source_duration_seconds: Decimal | None = None
+    source_distance_meters: Decimal | None = None
+    calculation_method: str | None = None
+    confidence: str | None = None
     algorithm_version: str
     is_active: bool
 
@@ -33,12 +39,14 @@ class PerformanceRecordHistoryResponse(BaseModel):
     exercise_id: UUID | None = None
     exercise_name: str | None = None
     repetition_count: int | None = None
+    distance_meters: int | None = None
     value: Decimal
     previous_value: Decimal | None = None
     unit: str
     achieved_at: datetime
     canonical_workout_id: UUID
     source_effort_id: UUID | None = None
+    source_running_effort_id: UUID | None = None
     algorithm_version: str
     change_type: str
 
@@ -49,6 +57,12 @@ class PerformanceRecordChangeResponse(PerformanceRecordResponse):
 
 
 class StrengthAnalysisResult(BaseModel):
+    canonical_workout_id: UUID
+    efforts_processed: int
+    records_changed: list[PerformanceRecordChangeResponse]
+
+
+class RunningAnalysisResult(BaseModel):
     canonical_workout_id: UUID
     efforts_processed: int
     records_changed: list[PerformanceRecordChangeResponse]

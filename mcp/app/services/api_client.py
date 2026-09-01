@@ -294,14 +294,17 @@ class OpenWearablesClient:
         *,
         sport: str | None = None,
         exercise_id: str | None = None,
+        distance_meters: int | None = None,
         record_type: str | None = None,
         include_inactive: bool = False,
     ) -> list[dict[str, Any]]:
-        params: dict[str, str | bool] = {"include_inactive": include_inactive}
+        params: dict[str, str | int | bool] = {"include_inactive": include_inactive}
         if sport:
             params["sport"] = sport
         if exercise_id:
             params["exercise_id"] = exercise_id
+        if distance_meters:
+            params["distance_meters"] = distance_meters
         if record_type:
             params["record_type"] = record_type
         response = await self._request(
@@ -315,13 +318,19 @@ class OpenWearablesClient:
         self,
         user_id: str,
         *,
+        sport: str | None = None,
         exercise_id: str | None = None,
+        distance_meters: int | None = None,
         record_type: str | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         params: dict[str, str | int] = {"limit": limit}
+        if sport:
+            params["sport"] = sport
         if exercise_id:
             params["exercise_id"] = exercise_id
+        if distance_meters:
+            params["distance_meters"] = distance_meters
         if record_type:
             params["record_type"] = record_type
         response = await self._request(

@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 
 from app.database import DbSession
 from app.models import (
@@ -14,12 +14,18 @@ from app.models import (
     ExerciseSet,
     PerformanceRecord,
     PerformanceRecordHistory,
+    RunningEffort,
     StrengthEffort,
     WorkoutExercise,
 )
 
 StrengthSetContext = tuple[CanonicalWorkout, EventRecord, ExerciseDefinition, ExerciseSet]
-PerformanceRecordContext = tuple[PerformanceRecord, ExerciseDefinition | None, StrengthEffort | None]
+PerformanceRecordContext = tuple[
+    PerformanceRecord,
+    ExerciseDefinition | None,
+    StrengthEffort | None,
+    RunningEffort | None,
+]
 
 
 class PerformanceRecordRepository:
@@ -111,6 +117,77 @@ class PerformanceRecordRepository:
         db.flush()
 
     @staticmethod
+    def get_running_effort(
+        db: DbSession,
+        canonical_workout_id: UUID,
+        target_distance_meters: int,
+        algorithm_version: str,
+    ) -> RunningEffort | None:
+        return (
+            db.query(RunningEffort)
+            .filter(
+                RunningEffort.canonical_workout_id == canonical_workout_id,
+                RunningEffort.target_distance_meters == target_distance_meters,
+                RunningEffort.algorithm_version == algorithm_version,
+            )
+            .one_or_none()
+        )
+
+    @staticmethod
+    def save_running_effort(db: DbSession, effort: RunningEffort) -> None:
+        db.add(effort)
+        db.flush()
+
+    @staticmethod
+    def list_running_efforts(
+        db: DbSession,
+        user_id: UUID,
+        target_distance_meters: int,
+        algorithm_version: str,
+    ) -> list[RunningEffort]:
+        return (
+            db.query(RunningEffort)
+            .filter(
+                RunningEffort.user_id == user_id,
+                RunningEffort.target_distance_meters == target_distance_meters,
+                RunningEffort.algorithm_version == algorithm_version,
+            )
+            .all()
+        )
+
+    @staticmethod
+    def list_running_canonical_ids(
+        db: DbSession,
+        *,
+        user_id: UUID | None = None,
+        start_datetime: datetime | None = None,
+        algorithm_version: str,
+        limit: int = 500,
+    ) -> list[UUID]:
+        query = (
+            db.query(CanonicalWorkout.id)
+            .filter(
+                CanonicalWorkout.workout_type == "running",
+                or_(
+                    CanonicalWorkout.running_pr_algorithm_version.is_(None),
+                    CanonicalWorkout.running_pr_algorithm_version != algorithm_version,
+                ),
+            )
+            .order_by(CanonicalWorkout.start_datetime.asc(), CanonicalWorkout.id.asc())
+        )
+        if user_id is not None:
+            query = query.filter(CanonicalWorkout.user_id == user_id)
+        if start_datetime is not None:
+            query = query.filter(CanonicalWorkout.start_datetime >= start_datetime)
+        return [canonical_id for (canonical_id,) in query.limit(limit).all()]
+
+    @staticmethod
+    def mark_running_analyzed(db: DbSession, canonical_workout_id: UUID, algorithm_version: str) -> None:
+        canonical = db.query(CanonicalWorkout).filter(CanonicalWorkout.id == canonical_workout_id).one()
+        canonical.running_pr_algorithm_version = algorithm_version
+        db.add(canonical)
+
+    @staticmethod
     def list_strength_efforts(
         db: DbSession,
         user_id: UUID,
@@ -163,11 +240,13 @@ class PerformanceRecordRepository:
         achieved_at: datetime,
         algorithm_version: str,
         change_type: str,
+        running_effort_id: UUID | None = None,
     ) -> PerformanceRecordHistory:
         history = PerformanceRecordHistory(
             id=uuid4(),
             performance_record_id=performance_record_id,
             strength_effort_id=strength_effort_id,
+            running_effort_id=running_effort_id,
             canonical_workout_id=canonical_workout_id,
             value=value,
             previous_value=previous_value,
@@ -186,13 +265,15 @@ class PerformanceRecordRepository:
         *,
         sport: str | None = None,
         exercise_definition_id: UUID | None = None,
+        distance_meters: int | None = None,
         record_type: str | None = None,
         include_inactive: bool = False,
     ) -> list[PerformanceRecordContext]:
         query = (
-            db.query(PerformanceRecord, ExerciseDefinition, StrengthEffort)
+            db.query(PerformanceRecord, ExerciseDefinition, StrengthEffort, RunningEffort)
             .outerjoin(ExerciseDefinition, ExerciseDefinition.id == PerformanceRecord.exercise_definition_id)
             .outerjoin(StrengthEffort, StrengthEffort.id == PerformanceRecord.strength_effort_id)
+            .outerjoin(RunningEffort, RunningEffort.id == PerformanceRecord.running_effort_id)
             .filter(PerformanceRecord.user_id == user_id)
         )
         if not include_inactive:
@@ -201,6 +282,8 @@ class PerformanceRecordRepository:
             query = query.filter(PerformanceRecord.sport == sport)
         if exercise_definition_id is not None:
             query = query.filter(PerformanceRecord.exercise_definition_id == exercise_definition_id)
+        if distance_meters is not None:
+            query = query.filter(PerformanceRecord.distance_meters == distance_meters)
         if record_type is not None:
             query = query.filter(PerformanceRecord.record_type == record_type)
         return cast(
@@ -217,7 +300,9 @@ class PerformanceRecordRepository:
         db: DbSession,
         user_id: UUID,
         *,
+        sport: str | None = None,
         exercise_definition_id: UUID | None = None,
+        distance_meters: int | None = None,
         record_type: str | None = None,
         limit: int = 100,
     ) -> list[tuple[PerformanceRecordHistory, PerformanceRecord, ExerciseDefinition | None]]:
@@ -229,6 +314,10 @@ class PerformanceRecordRepository:
         )
         if exercise_definition_id is not None:
             query = query.filter(PerformanceRecord.exercise_definition_id == exercise_definition_id)
+        if sport is not None:
+            query = query.filter(PerformanceRecord.sport == sport)
+        if distance_meters is not None:
+            query = query.filter(PerformanceRecord.distance_meters == distance_meters)
         if record_type is not None:
             query = query.filter(PerformanceRecord.record_type == record_type)
         return cast(
@@ -274,6 +363,25 @@ class PerformanceRecordRepository:
         if user_id is not None:
             query = query.filter(PerformanceRecord.user_id == user_id)
         return cast(list[tuple[UUID, UUID]], query.distinct().all())
+
+    @staticmethod
+    def list_running_records(db: DbSession, user_id: UUID) -> list[PerformanceRecord]:
+        return (
+            db.query(PerformanceRecord)
+            .filter(PerformanceRecord.user_id == user_id, PerformanceRecord.sport == "running")
+            .all()
+        )
+
+    @staticmethod
+    def list_orphaned_running_record_users(db: DbSession, user_id: UUID | None = None) -> list[UUID]:
+        query = db.query(PerformanceRecord.user_id).filter(
+            PerformanceRecord.sport == "running",
+            PerformanceRecord.is_active.is_(True),
+            PerformanceRecord.running_effort_id.is_(None),
+        )
+        if user_id is not None:
+            query = query.filter(PerformanceRecord.user_id == user_id)
+        return [item_user_id for (item_user_id,) in query.distinct().all()]
 
     @staticmethod
     def commit(db: DbSession) -> None:

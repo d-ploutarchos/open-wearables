@@ -18,6 +18,7 @@ def list_performance_records(
     _api_key: ApiKeyDep,
     sport: Annotated[str | None, Query(max_length=32)] = None,
     exercise_id: UUID | None = None,
+    distance_meters: Annotated[int | None, Query(ge=1)] = None,
     record_type: Annotated[str | None, Query(max_length=32)] = None,
     include_inactive: bool = False,
 ) -> list[PerformanceRecordResponse]:
@@ -27,6 +28,7 @@ def list_performance_records(
         user_id,
         sport=sport,
         exercise_definition_id=exercise_id,
+        distance_meters=distance_meters,
         record_type=record_type,
         include_inactive=include_inactive,
     )
@@ -37,7 +39,9 @@ def list_performance_record_history(
     user_id: UUID,
     db: DbSession,
     _api_key: ApiKeyDep,
+    sport: Annotated[str | None, Query(max_length=32)] = None,
     exercise_id: UUID | None = None,
+    distance_meters: Annotated[int | None, Query(ge=1)] = None,
     record_type: Annotated[str | None, Query(max_length=32)] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[PerformanceRecordHistoryResponse]:
@@ -45,7 +49,9 @@ def list_performance_record_history(
     return performance_record_service.list_history(
         db,
         user_id,
+        sport=sport,
         exercise_definition_id=exercise_id,
+        distance_meters=distance_meters,
         record_type=record_type,
         limit=limit,
     )

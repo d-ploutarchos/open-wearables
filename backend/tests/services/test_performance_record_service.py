@@ -3,8 +3,9 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 from uuid import uuid4
 
-from app.models import StrengthEffort
+from app.models import RunningEffort, StrengthEffort
 from app.services.performance_record_service import (
+    RUNNING_ALGORITHM_VERSION,
     STRENGTH_ALGORITHM_VERSION,
     PerformanceRecordService,
     _RecordCandidate,
@@ -90,3 +91,66 @@ def test_record_sync_is_idempotent_for_same_winning_effort() -> None:
     assert second_previous is None
     service.repository.append_history.assert_not_called()
     service.repository.save_record.assert_not_called()
+
+
+def _running_effort(*, distance: int, seconds: str) -> RunningEffort:
+    duration = Decimal(seconds)
+    return RunningEffort(
+        id=uuid4(),
+        user_id=uuid4(),
+        canonical_workout_id=uuid4(),
+        event_record_id=uuid4(),
+        performed_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        target_distance_meters=distance,
+        actual_distance_meters=Decimal(distance),
+        elapsed_seconds=duration,
+        pace_seconds_per_km=duration / Decimal(distance) * Decimal(1000),
+        calculation_method="whole_run",
+        confidence="high",
+        algorithm_version=RUNNING_ALGORITHM_VERSION,
+    )
+
+
+def test_whole_run_eligibility_requires_standard_distance_finish() -> None:
+    assert PerformanceRecordService._eligible_whole_run(Decimal("5020"), 5000) is True
+    assert PerformanceRecordService._eligible_whole_run(Decimal("4900"), 5000) is False
+    assert PerformanceRecordService._eligible_whole_run(Decimal("10000"), 5000) is False
+
+
+def test_running_candidate_selects_fastest_measured_finish() -> None:
+    service = PerformanceRecordService()
+    slower = _running_effort(distance=5000, seconds="1500")
+    faster = _running_effort(distance=5000, seconds="1425")
+
+    candidate = service._running_candidate([slower, faster])
+
+    assert candidate is not None
+    assert candidate.value == Decimal("1425")
+    assert candidate.effort.id == faster.id
+
+
+def test_faster_running_time_is_an_improvement() -> None:
+    service = PerformanceRecordService()
+    service.repository = MagicMock()
+    first = _running_effort(distance=5000, seconds="1500")
+    faster = _running_effort(distance=5000, seconds="1425")
+    db = MagicMock()
+    service.repository.get_record.return_value = None
+    first_candidate = service._running_candidate([first])
+    faster_candidate = service._running_candidate([faster])
+    assert first_candidate is not None
+    assert faster_candidate is not None
+
+    record, first_change, _ = service._sync_running_candidate(db, first.user_id, first_candidate)
+    service.repository.get_record.return_value = record
+
+    updated, second_change, previous = service._sync_running_candidate(
+        db,
+        first.user_id,
+        faster_candidate,
+    )
+
+    assert first_change == "created"
+    assert second_change == "improved"
+    assert previous == Decimal("1500")
+    assert updated.value == Decimal("1425")

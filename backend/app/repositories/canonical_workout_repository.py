@@ -82,10 +82,11 @@ class CanonicalWorkoutRepository:
             total_count,
         )
 
-    def list_unlinked_strength_record_ids(
+    def list_unlinked_record_ids(
         self,
         db: DbSession,
         *,
+        workout_type: str,
         user_id: UUID | None = None,
         start_datetime: datetime | None = None,
         limit: int = 500,
@@ -96,9 +97,8 @@ class CanonicalWorkoutRepository:
             .outerjoin(CanonicalWorkoutSource, CanonicalWorkoutSource.event_record_id == EventRecord.id)
             .filter(
                 CanonicalWorkoutSource.id.is_(None),
-                DataSource.provider.in_([ProviderName.HEVY, ProviderName.APPLE]),
                 EventRecord.category == "workout",
-                EventRecord.type == "strength_training",
+                EventRecord.type == workout_type,
             )
             .order_by(EventRecord.start_datetime.asc(), EventRecord.id.asc())
         )
@@ -108,6 +108,22 @@ class CanonicalWorkoutRepository:
             query = query.filter(EventRecord.start_datetime >= start_datetime)
         return [record_id for (record_id,) in query.limit(limit).all()]
 
+    def list_unlinked_strength_record_ids(
+        self,
+        db: DbSession,
+        *,
+        user_id: UUID | None = None,
+        start_datetime: datetime | None = None,
+        limit: int = 500,
+    ) -> list[UUID]:
+        return self.list_unlinked_record_ids(
+            db,
+            workout_type="strength_training",
+            user_id=user_id,
+            start_datetime=start_datetime,
+            limit=limit,
+        )
+
     def find_overlapping_records(
         self,
         db: DbSession,
@@ -116,20 +132,23 @@ class CanonicalWorkoutRepository:
         start_time: datetime,
         end_time: datetime,
     ) -> list[WorkoutContext]:
-        return cast(
-            list[WorkoutContext],
+        query = (
             db.query(EventRecord, DataSource, WorkoutDetails)
             .join(DataSource, EventRecord.data_source_id == DataSource.id)
             .outerjoin(WorkoutDetails, WorkoutDetails.record_id == EventRecord.id)
             .filter(
                 DataSource.user_id == user_id,
-                DataSource.provider.in_([ProviderName.HEVY, ProviderName.APPLE]),
                 EventRecord.category == "workout",
                 EventRecord.type == workout_type,
                 EventRecord.start_datetime < end_time,
                 EventRecord.end_datetime > start_time,
             )
-            .all(),
+        )
+        if workout_type == "strength_training":
+            query = query.filter(DataSource.provider.in_([ProviderName.HEVY, ProviderName.APPLE]))
+        return cast(
+            list[WorkoutContext],
+            query.all(),
         )
 
     def find_overlapping_canonical(

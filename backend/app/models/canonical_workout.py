@@ -24,4 +24,5 @@ class CanonicalWorkout(BaseDbModel):
     name: Mapped[str_64]
     start_datetime: Mapped[datetime]
     end_datetime: Mapped[datetime]
+    running_pr_algorithm_version: Mapped[str_32 | None]
     updated_at: Mapped[datetime]

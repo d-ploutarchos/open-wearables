@@ -42,8 +42,8 @@ mcp = FastMCP(
     - get_strength_progress: Analyze load, volume, repetitions, and estimated 1RM over time
     - get_canonical_workout: Read one physical workout merged across structural and physiological sources
     - list_canonical_workouts: Search merged workout history by date, workout name, or exercise name
-    - get_personal_records: Read current provider-neutral athletic PRs
-    - get_pr_history: Read strength PR progression, corrections, and revocations
+    - get_personal_records: Read current provider-neutral strength or running PRs
+    - get_pr_history: Read strength or running PR progression, corrections, and revocations
     - get_timeseries: Get granular time-series samples (e.g. weight, SpO2, HRV, intraday heart rate)
     - get_menstrual_cycles: Get menstrual cycle records (cycle day, phase, period and cycle lengths)
 
@@ -61,6 +61,12 @@ mcp = FastMCP(
        - If NO time period specified: default to the last 2 weeks (start_date = 14 days ago, end_date = today)
     4. Use the user's ID to query their health data with the appropriate tool
     5. Present the data in a human-friendly format, highlighting key insights
+
+    Performance-record routing:
+    - For PR, personal-best, 1RM, or standard-distance questions, call get_personal_records first.
+    - Use sport="strength" for lifting PRs and sport="running" for running bests.
+    - For a running distance, pass distance_meters (for example 5000 for 5K).
+    - Use get_strength_progress for longitudinal set-derived exercise analysis, not get_workout_events.
 
     Example interaction:
     User: "How many steps did I take this week?"

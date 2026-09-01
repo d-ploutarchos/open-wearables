@@ -5,17 +5,21 @@ from operator import attrgetter
 from uuid import UUID, uuid4
 
 from app.database import DbSession
-from app.models import PerformanceRecord, StrengthEffort
+from app.models import PerformanceRecord, RunningEffort, StrengthEffort
 from app.repositories.performance_record_repository import PerformanceRecordRepository
 from app.schemas.performance_records import (
     PerformanceRecordChangeResponse,
     PerformanceRecordHistoryResponse,
     PerformanceRecordResponse,
+    RunningAnalysisResult,
     StrengthAnalysisResult,
 )
+from app.services.canonical_workout_service import canonical_workout_service
 
 STRENGTH_ALGORITHM_VERSION = "strength-v1"
+RUNNING_ALGORITHM_VERSION = "running-whole-v1"
 E1RM_MAX_REPETITIONS = 12
+STANDARD_RUNNING_DISTANCES = (400, 800, 1000, 1609, 2000, 5000, 10000, 21097, 42195)
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,13 @@ class _RecordChange:
     previous_value: Decimal | None
 
 
+@dataclass(frozen=True)
+class _RunningRecordCandidate:
+    target_distance_meters: int
+    value: Decimal
+    effort: RunningEffort
+
+
 class PerformanceRecordService:
     def __init__(self) -> None:
         self.repository = PerformanceRecordRepository()
@@ -50,6 +61,68 @@ class PerformanceRecordService:
         return (
             set_type != "warmup" and load_kg is not None and load_kg > 0 and repetitions is not None and repetitions > 0
         )
+
+    @staticmethod
+    def _eligible_whole_run(actual_distance_meters: Decimal, target_distance_meters: int) -> bool:
+        """Accept completed runs close to a standard distance without inventing an in-run split."""
+        target = Decimal(target_distance_meters)
+        minimum = target * Decimal("0.995")
+        maximum = target + max(Decimal("10"), target * Decimal("0.02"))
+        return minimum <= actual_distance_meters <= maximum
+
+    def _upsert_running_efforts(
+        self,
+        db: DbSession,
+        canonical_workout_id: UUID,
+    ) -> tuple[int, set[int], UUID | None]:
+        response = canonical_workout_service.get_response(db, canonical_workout_id)
+        if response is None or response.type != "running" or response.distance_meters is None:
+            return 0, set(), None
+        actual_distance = Decimal(str(response.distance_meters))
+        duration = Decimal(response.duration_seconds)
+        if actual_distance <= 0 or duration <= 0 or not response.sources:
+            return 0, set(), response.user_id
+
+        processed = 0
+        touched_distances: set[int] = set()
+        event_record_id = response.sources[0].event_record_id
+        for target_distance in STANDARD_RUNNING_DISTANCES:
+            if not self._eligible_whole_run(actual_distance, target_distance):
+                continue
+            effort = self.repository.get_running_effort(
+                db,
+                canonical_workout_id,
+                target_distance,
+                RUNNING_ALGORITHM_VERSION,
+            )
+            pace = (duration / actual_distance * Decimal(1000)).quantize(Decimal("0.001"))
+            if effort is None:
+                effort = RunningEffort(
+                    id=uuid4(),
+                    user_id=response.user_id,
+                    canonical_workout_id=canonical_workout_id,
+                    event_record_id=event_record_id,
+                    performed_at=response.start_time,
+                    target_distance_meters=target_distance,
+                    actual_distance_meters=actual_distance,
+                    elapsed_seconds=duration,
+                    pace_seconds_per_km=pace,
+                    calculation_method="whole_run",
+                    confidence="high",
+                    algorithm_version=RUNNING_ALGORITHM_VERSION,
+                )
+            else:
+                effort.event_record_id = event_record_id
+                effort.performed_at = response.start_time
+                effort.actual_distance_meters = actual_distance
+                effort.elapsed_seconds = duration
+                effort.pace_seconds_per_km = pace
+                effort.calculation_method = "whole_run"
+                effort.confidence = "high"
+            self.repository.save_running_effort(db, effort)
+            processed += 1
+            touched_distances.add(target_distance)
+        return processed, touched_distances, response.user_id
 
     def _upsert_efforts(
         self,
@@ -243,11 +316,131 @@ class PerformanceRecordService:
             changed.append(_RecordChange(record, "revoked", previous_value))
         return changed
 
+    def _running_candidate(
+        self,
+        efforts: list[RunningEffort],
+    ) -> _RunningRecordCandidate | None:
+        if not efforts:
+            return None
+        effort = min(efforts, key=lambda item: (item.elapsed_seconds, item.performed_at.timestamp()))
+        return _RunningRecordCandidate(
+            target_distance_meters=effort.target_distance_meters,
+            value=effort.elapsed_seconds,
+            effort=effort,
+        )
+
+    def _sync_running_candidate(
+        self,
+        db: DbSession,
+        user_id: UUID,
+        candidate: _RunningRecordCandidate,
+    ) -> tuple[PerformanceRecord, str | None, Decimal | None]:
+        now = datetime.now(timezone.utc)
+        scope_key = f"distance:{candidate.target_distance_meters}:fastest_time"
+        record = self.repository.get_record(db, user_id, "running", "fastest_time", scope_key)
+        previous_value: Decimal | None = None
+        change_type: str | None = None
+        if record is None:
+            record = PerformanceRecord(
+                id=uuid4(),
+                user_id=user_id,
+                sport="running",
+                record_type="fastest_time",
+                scope_key=scope_key,
+                exercise_definition_id=None,
+                repetition_count=None,
+                distance_meters=candidate.target_distance_meters,
+                value=candidate.value,
+                unit="seconds",
+                strength_effort_id=None,
+                running_effort_id=candidate.effort.id,
+                canonical_workout_id=candidate.effort.canonical_workout_id,
+                achieved_at=candidate.effort.performed_at,
+                algorithm_version=RUNNING_ALGORITHM_VERSION,
+                is_active=True,
+                updated_at=now,
+            )
+            change_type = "created"
+        elif not record.is_active:
+            previous_value = record.value
+            change_type = "restored"
+        elif record.value != candidate.value:
+            previous_value = record.value
+            change_type = "improved" if candidate.value < record.value else "corrected"
+
+        source_changed = record.running_effort_id != candidate.effort.id
+        if change_type is not None or source_changed:
+            record.distance_meters = candidate.target_distance_meters
+            record.value = candidate.value
+            record.running_effort_id = candidate.effort.id
+            record.strength_effort_id = None
+            record.canonical_workout_id = candidate.effort.canonical_workout_id
+            record.achieved_at = candidate.effort.performed_at
+            record.algorithm_version = RUNNING_ALGORITHM_VERSION
+            record.is_active = True
+            record.updated_at = now
+            self.repository.save_record(db, record)
+        if change_type is not None:
+            self.repository.append_history(
+                db,
+                performance_record_id=record.id,
+                strength_effort_id=None,
+                running_effort_id=candidate.effort.id,
+                canonical_workout_id=candidate.effort.canonical_workout_id,
+                value=candidate.value,
+                previous_value=previous_value,
+                achieved_at=candidate.effort.performed_at,
+                algorithm_version=RUNNING_ALGORITHM_VERSION,
+                change_type=change_type,
+            )
+        return record, change_type, previous_value
+
+    def _recompute_running(
+        self, db: DbSession, user_id: UUID, distances: set[int] | None = None
+    ) -> list[_RecordChange]:
+        distances = distances or set(STANDARD_RUNNING_DISTANCES)
+        existing = {record.distance_meters: record for record in self.repository.list_running_records(db, user_id)}
+        changed: list[_RecordChange] = []
+        for distance in sorted(distances):
+            candidate = self._running_candidate(
+                self.repository.list_running_efforts(db, user_id, distance, RUNNING_ALGORITHM_VERSION)
+            )
+            if candidate is None:
+                continue
+            record, change_type, previous_value = self._sync_running_candidate(db, user_id, candidate)
+            if change_type is not None:
+                changed.append(_RecordChange(record, change_type, previous_value))
+            existing.pop(distance, None)
+
+        now = datetime.now(timezone.utc)
+        for distance, record in existing.items():
+            if distance not in distances or not record.is_active:
+                continue
+            previous_value = record.value
+            record.is_active = False
+            record.running_effort_id = None
+            record.updated_at = now
+            self.repository.save_record(db, record)
+            self.repository.append_history(
+                db,
+                performance_record_id=record.id,
+                strength_effort_id=None,
+                canonical_workout_id=record.canonical_workout_id,
+                value=record.value,
+                previous_value=previous_value,
+                achieved_at=now,
+                algorithm_version=RUNNING_ALGORITHM_VERSION,
+                change_type="revoked",
+            )
+            changed.append(_RecordChange(record, "revoked", previous_value))
+        return changed
+
     @staticmethod
     def _response(
         record: PerformanceRecord,
         exercise_name: str | None,
         effort: StrengthEffort | None,
+        running_effort: RunningEffort | None,
     ) -> PerformanceRecordResponse:
         return PerformanceRecordResponse(
             id=record.id,
@@ -257,13 +450,19 @@ class PerformanceRecordService:
             exercise_id=record.exercise_definition_id,
             exercise_name=exercise_name,
             repetition_count=record.repetition_count,
+            distance_meters=record.distance_meters,
             value=record.value,
             unit=record.unit,
             achieved_at=record.achieved_at,
             canonical_workout_id=record.canonical_workout_id,
             source_effort_id=record.strength_effort_id,
+            source_running_effort_id=record.running_effort_id,
             source_load_kg=effort.load_kg if effort else None,
             source_repetitions=effort.repetitions if effort else None,
+            source_duration_seconds=running_effort.elapsed_seconds if running_effort else None,
+            source_distance_meters=running_effort.actual_distance_meters if running_effort else None,
+            calculation_method=running_effort.calculation_method if running_effort else None,
+            confidence=running_effort.confidence if running_effort else None,
             algorithm_version=record.algorithm_version,
             is_active=record.is_active,
         )
@@ -290,11 +489,43 @@ class PerformanceRecordService:
             efforts_processed=processed,
             records_changed=[
                 PerformanceRecordChangeResponse(
-                    **self._response(record, definition.name if definition else None, effort).model_dump(),
+                    **self._response(
+                        record, definition.name if definition else None, effort, running_effort
+                    ).model_dump(),
                     change_type=changes[record.id].change_type,
                     previous_value=changes[record.id].previous_value,
                 )
-                for record, definition, effort in changed_contexts
+                for record, definition, effort, running_effort in changed_contexts
+            ],
+        )
+
+    def analyze_running_workout(self, db: DbSession, canonical_workout_id: UUID) -> RunningAnalysisResult:
+        processed, distances, user_id = self._upsert_running_efforts(db, canonical_workout_id)
+        self.repository.mark_running_analyzed(db, canonical_workout_id, RUNNING_ALGORITHM_VERSION)
+        if user_id is None:
+            self.repository.commit(db)
+            return RunningAnalysisResult(
+                canonical_workout_id=canonical_workout_id,
+                efforts_processed=0,
+                records_changed=[],
+            )
+        changes = {change.record.id: change for change in self._recompute_running(db, user_id, distances)}
+        self.repository.commit(db)
+        changed_contexts = [
+            context
+            for context in self.repository.list_records(db, user_id, include_inactive=True)
+            if context[0].id in changes
+        ]
+        return RunningAnalysisResult(
+            canonical_workout_id=canonical_workout_id,
+            efforts_processed=processed,
+            records_changed=[
+                PerformanceRecordChangeResponse(
+                    **self._response(record, None, strength_effort, running_effort).model_dump(),
+                    change_type=changes[record.id].change_type,
+                    previous_value=changes[record.id].previous_value,
+                )
+                for record, _definition, strength_effort, running_effort in changed_contexts
             ],
         )
 
@@ -326,6 +557,34 @@ class PerformanceRecordService:
             self.repository.commit(db)
         return len(canonical_ids), efforts, changes
 
+    def backfill_running(
+        self,
+        db: DbSession,
+        *,
+        user_id: UUID | None = None,
+        start_datetime: datetime | None = None,
+        limit: int = 500,
+    ) -> tuple[int, int, int]:
+        canonical_ids = self.repository.list_running_canonical_ids(
+            db,
+            user_id=user_id,
+            start_datetime=start_datetime,
+            algorithm_version=RUNNING_ALGORITHM_VERSION,
+            limit=limit,
+        )
+        efforts = 0
+        changes = 0
+        for canonical_id in canonical_ids:
+            result = self.analyze_running_workout(db, canonical_id)
+            efforts += result.efforts_processed
+            changes += len(result.records_changed)
+        orphaned_users = self.repository.list_orphaned_running_record_users(db, user_id)
+        for orphan_user_id in orphaned_users:
+            changes += len(self._recompute_running(db, orphan_user_id))
+        if orphaned_users:
+            self.repository.commit(db)
+        return len(canonical_ids), efforts, changes
+
     def list_records(
         self,
         db: DbSession,
@@ -333,16 +592,18 @@ class PerformanceRecordService:
         *,
         sport: str | None = None,
         exercise_definition_id: UUID | None = None,
+        distance_meters: int | None = None,
         record_type: str | None = None,
         include_inactive: bool = False,
     ) -> list[PerformanceRecordResponse]:
         return [
-            self._response(record, definition.name if definition else None, effort)
-            for record, definition, effort in self.repository.list_records(
+            self._response(record, definition.name if definition else None, effort, running_effort)
+            for record, definition, effort, running_effort in self.repository.list_records(
                 db,
                 user_id,
                 sport=sport,
                 exercise_definition_id=exercise_definition_id,
+                distance_meters=distance_meters,
                 record_type=record_type,
                 include_inactive=include_inactive,
             )
@@ -353,7 +614,9 @@ class PerformanceRecordService:
         db: DbSession,
         user_id: UUID,
         *,
+        sport: str | None = None,
         exercise_definition_id: UUID | None = None,
+        distance_meters: int | None = None,
         record_type: str | None = None,
         limit: int = 100,
     ) -> list[PerformanceRecordHistoryResponse]:
@@ -367,19 +630,23 @@ class PerformanceRecordService:
                 exercise_id=record.exercise_definition_id,
                 exercise_name=definition.name if definition else None,
                 repetition_count=record.repetition_count,
+                distance_meters=record.distance_meters,
                 value=history.value,
                 previous_value=history.previous_value,
                 unit=record.unit,
                 achieved_at=history.achieved_at,
                 canonical_workout_id=history.canonical_workout_id,
                 source_effort_id=history.strength_effort_id,
+                source_running_effort_id=history.running_effort_id,
                 algorithm_version=history.algorithm_version,
                 change_type=history.change_type,
             )
             for history, record, definition in self.repository.list_history(
                 db,
                 user_id,
+                sport=sport,
                 exercise_definition_id=exercise_definition_id,
+                distance_meters=distance_meters,
                 record_type=record_type,
                 limit=limit,
             )
