@@ -121,3 +121,13 @@ def test_direction_does_not_claim_injury_risk() -> None:
         "within_baseline",
         Decimal("1.00"),
     )
+
+
+def test_pearson_reports_association_without_causal_label() -> None:
+    coefficient = TrainingLoadService._pearson(
+        [Decimal(value) for value in range(8)],
+        [Decimal(value) for value in reversed(range(8))],
+    )
+
+    assert coefficient == Decimal("-1.00")
+    assert TrainingLoadService._correlation_labels(coefficient) == ("negative", "strong")

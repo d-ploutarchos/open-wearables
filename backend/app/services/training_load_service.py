@@ -2,6 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from math import sqrt
 from operator import attrgetter
 from uuid import UUID
 
@@ -10,6 +11,7 @@ from app.models import CanonicalWorkout, ExerciseDefinition, HealthScore, Streng
 from app.repositories.training_load_repository import TrainingLoadRepository
 from app.schemas.training_load import (
     HealthScoreContext,
+    LoadHealthCorrelation,
     LoadMetricComparison,
     MuscleGroupLoad,
     TrainingLoadResponse,
@@ -142,6 +144,32 @@ class TrainingLoadService:
             return None
         return (sum(values, Decimal(0)) / Decimal(len(values))).quantize(Decimal("0.1"))
 
+    @staticmethod
+    def _pearson(left: list[Decimal], right: list[Decimal]) -> Decimal | None:
+        if len(left) != len(right) or len(left) < 2:
+            return None
+        left_mean = sum(left, Decimal(0)) / Decimal(len(left))
+        right_mean = sum(right, Decimal(0)) / Decimal(len(right))
+        numerator = sum(((x - left_mean) * (y - right_mean) for x, y in zip(left, right, strict=True)), Decimal(0))
+        left_variance = sum(((x - left_mean) ** 2 for x in left), Decimal(0))
+        right_variance = sum(((y - right_mean) ** 2 for y in right), Decimal(0))
+        if left_variance == 0 or right_variance == 0:
+            return None
+        coefficient = float(numerator) / sqrt(float(left_variance * right_variance))
+        return Decimal(str(coefficient)).quantize(Decimal("0.01"))
+
+    @staticmethod
+    def _correlation_labels(coefficient: Decimal) -> tuple[str, str]:
+        magnitude = abs(coefficient)
+        if coefficient > Decimal("0.15"):
+            direction = "positive"
+        elif coefficient < Decimal("-0.15"):
+            direction = "negative"
+        else:
+            direction = "negligible"
+        strength = "strong" if magnitude >= Decimal("0.6") else "moderate" if magnitude >= Decimal("0.3") else "weak"
+        return direction, strength
+
     def get_training_load(
         self,
         db: DbSession,
@@ -247,7 +275,7 @@ class TrainingLoadService:
 
         priorities = self.repository.provider_priorities(db)
         scores = self._preferred_scores(
-            self.repository.list_health_scores(db, user_id, previous_start, now),
+            self.repository.list_health_scores(db, user_id, data_start, now),
             priorities,
         )
         score_groups: dict[str, list[HealthScore]] = defaultdict(list)
@@ -257,9 +285,12 @@ class TrainingLoadService:
                 score_groups[category].append(score)
         health_scores: list[HealthScoreContext] = []
         for category, category_scores in score_groups.items():
-            current_scores = [item for item in category_scores if item.recorded_at >= current_start]
-            previous_scores = [item for item in category_scores if item.recorded_at < current_start]
-            latest = current_scores[-1] if current_scores else category_scores[-1]
+            context_scores = [item for item in category_scores if item.recorded_at >= previous_start]
+            if not context_scores:
+                continue
+            current_scores = [item for item in context_scores if item.recorded_at >= current_start]
+            previous_scores = [item for item in context_scores if item.recorded_at < current_start]
+            latest = current_scores[-1] if current_scores else context_scores[-1]
             current_average = self._average(current_scores)
             previous_average = self._average(previous_scores)
             health_scores.append(
@@ -278,6 +309,49 @@ class TrainingLoadService:
                 )
             )
 
+        daily_load: dict[object, dict[str, Decimal]] = defaultdict(
+            lambda: {
+                "workout_duration": Decimal(0),
+                "strength_volume": Decimal(0),
+                "running_distance": Decimal(0),
+            }
+        )
+        for workout in workouts:
+            day = workout.start_datetime.date()
+            daily_load[day]["workout_duration"] += Decimal(
+                str(max(0, (workout.end_datetime - workout.start_datetime).total_seconds()))
+            ) / Decimal(60)
+            daily_load[day]["running_distance"] += running_distances.get(workout.id, Decimal(0)) / Decimal(1000)
+        for effort, _definition in effort_contexts:
+            daily_load[effort.performed_at.date()]["strength_volume"] += effort.volume_kg
+
+        correlations: list[LoadHealthCorrelation] = []
+        for category, category_scores in score_groups.items():
+            for metric in ("workout_duration", "strength_volume", "running_distance"):
+                load_values = []
+                score_values = []
+                for score in category_scores:
+                    prior_day = score.recorded_at.date() - timedelta(days=1)
+                    load_values.append(daily_load[prior_day][metric])
+                    if score.value is not None:
+                        score_values.append(Decimal(score.value))
+                if len(load_values) != len(score_values) or len(load_values) < 7:
+                    continue
+                coefficient = self._pearson(load_values, score_values)
+                if coefficient is None:
+                    continue
+                direction, strength = self._correlation_labels(coefficient)
+                correlations.append(
+                    LoadHealthCorrelation(
+                        load_metric=metric,
+                        health_score_category=category,
+                        paired_days=len(load_values),
+                        coefficient=coefficient,
+                        direction=direction,
+                        strength=strength,
+                    )
+                )
+
         muscle_groups.sort(key=attrgetter("muscle_group"))
         muscle_groups.sort(key=attrgetter("current_work_sets"), reverse=True)
         health_scores.sort(key=attrgetter("category"))
@@ -291,10 +365,12 @@ class TrainingLoadService:
             metrics=metrics,
             muscle_groups=muscle_groups,
             health_scores=health_scores,
+            load_health_correlations=sorted(correlations, key=attrgetter("health_score_category", "load_metric")),
             interpretation_notes=[
                 "Strength volume is the sum of eligible external-load work sets and is not comparable across athletes.",
                 "Recent-to-baseline ratios describe workload change; they are not injury-risk predictions.",
                 "Health scores are contextual signals and do not establish that training caused a change.",
+                "Correlations require at least seven paired days and compare load with the following day's score.",
             ],
         )
 

@@ -59,6 +59,8 @@ The response intentionally keeps unlike measurements separate:
 
 Each workload metric includes current and previous values, a baseline normalized to the selected recent-window length, percentage change, and a `recent_to_baseline_ratio`. Direction labels are `no_load`, `new_load`, `below_baseline`, `within_baseline`, `above_baseline`, or `spike`.
 
+When at least seven paired days are available, `load_health_correlations` compares daily workout duration, strength volume, and running distance with the following day's health score. It returns the Pearson coefficient, direction, strength, sample count, and explicit one-day lag. Missing or zero-variance series are omitted.
+
 <Warning>
   A workload ratio describes change in recorded training; it is not an injury-risk prediction. A health-score change is contextual and does not establish that training caused the change.
 </Warning>

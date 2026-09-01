@@ -52,6 +52,16 @@ class HealthScoreContext(BaseModel):
     change: Decimal | None = None
 
 
+class LoadHealthCorrelation(BaseModel):
+    load_metric: str
+    health_score_category: str
+    lag_days: int = 1
+    paired_days: int
+    coefficient: Decimal
+    direction: str
+    strength: str
+
+
 class TrainingLoadResponse(BaseModel):
     user_id: UUID
     generated_at: datetime
@@ -62,4 +72,5 @@ class TrainingLoadResponse(BaseModel):
     metrics: list[LoadMetricComparison]
     muscle_groups: list[MuscleGroupLoad]
     health_scores: list[HealthScoreContext]
+    load_health_correlations: list[LoadHealthCorrelation]
     interpretation_notes: list[str]
