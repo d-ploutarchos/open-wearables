@@ -104,3 +104,15 @@ def test_status_marks_recent_strict_best_as_progressing() -> None:
 
     assert status == "progressing"
     assert attempts_since_best == 0
+
+
+def test_progress_marks_untrained_metrics_inactive() -> None:
+    service = CoachingProgressService()
+    service.repository = MagicMock()
+    service.repository.list_strength_effort_contexts_for_user.return_value = []
+    service.repository.list_running_efforts_for_user.return_value = [_running_effort(90, "400")]
+
+    result = service.get_progress(MagicMock(), USER_ID, generated_at=NOW, window_days=42)
+
+    assert result.running[0].status == "inactive"
+    assert result.running[0].attempts_in_window == 0

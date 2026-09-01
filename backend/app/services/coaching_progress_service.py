@@ -130,6 +130,8 @@ class CoachingProgressService:
                 if recent_average is not None and previous_average is not None
                 else None
             )
+            if not recent_volumes:
+                status = "inactive"
             strength.append(
                 StrengthProgressInsight(
                     exercise_id=definition.id,
@@ -179,12 +181,15 @@ class CoachingProgressService:
             first = efforts[0]
             latest = efforts[-1]
             seconds_improved = first.elapsed_seconds - latest.elapsed_seconds
+            attempts_in_window = sum(item.performed_at >= recent_start for item in efforts)
+            if attempts_in_window == 0:
+                status = "inactive"
             running.append(
                 RunningProgressInsight(
                     distance_meters=distance,
                     status=status,
                     attempts=len(efforts),
-                    attempts_in_window=sum(item.performed_at >= recent_start for item in efforts),
+                    attempts_in_window=attempts_in_window,
                     latest_performed_at=latest.performed_at,
                     latest_time_seconds=latest.elapsed_seconds,
                     personal_best_time_seconds=personal_best,

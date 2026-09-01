@@ -93,7 +93,7 @@ async def get_coaching_progress(
     """Get coach-ready longitudinal strength and running progression signals.
 
     Returns latest and best performances, baseline change, recent strength-volume direction,
-    sessions or attempts since the best result, and conservative new/progressing/maintaining/plateau
+    sessions or attempts since the best result, and conservative new/progressing/maintaining/plateau/inactive
     labels. Pass an exercise name or UUID to focus strength analysis, or a standard running distance.
     """
     try:
