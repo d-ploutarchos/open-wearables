@@ -147,13 +147,16 @@ class HevyWorkouts:
         end = kwargs.get("end") or kwargs.get("end_date")
         start_dt = self._coerce_datetime(start, datetime.now(timezone.utc) - timedelta(days=90))
         end_dt = self._coerce_datetime(end, datetime.now(timezone.utc))
-        if start_dt.year <= 1970:
-            count = 0
-            for workout in self.get_workouts(db, user_id, start_dt, end_dt):
-                self.ingest_workout(db, user_id, workout)
-                count += 1
-            return count
-        return self.reconcile_events(db, user_id, start_dt - timedelta(minutes=5))
+        count = 0
+        # Hevy's events endpoint only reports updates and deletes. New workouts
+        # are normally announced by webhook, so a recovery pull must also scan
+        # the workout list or a missed webhook would leave the workout absent.
+        for workout in self.get_workouts(db, user_id, start_dt - timedelta(minutes=5), end_dt):
+            self.ingest_workout(db, user_id, workout)
+            count += 1
+        if start_dt.year > 1970:
+            count += self.reconcile_events(db, user_id, start_dt - timedelta(minutes=5))
+        return count
 
     def reconcile_events(self, db: DbSession, user_id: UUID, since: datetime) -> int:
         """Apply updated/deleted workout events with a small overlap for delivery safety."""

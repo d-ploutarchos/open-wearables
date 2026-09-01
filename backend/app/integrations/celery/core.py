@@ -151,6 +151,12 @@ def create_celery() -> Celery:
             "args": (),
             "kwargs": {},
         },
+        "reconcile-hevy-workouts": {
+            "task": "app.integrations.celery.tasks.hevy_workout_task.reconcile_all_hevy_workouts",
+            "schedule": 300.0,
+            "args": (),
+            "kwargs": {},
+        },
         "run-daily-archival": {
             "task": "app.integrations.celery.tasks.archival_task.run_daily_archival",
             "schedule": crontab(hour=3, minute=0),  # Daily at 03:00 UTC

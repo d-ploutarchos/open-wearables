@@ -1,7 +1,11 @@
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from unittest.mock import MagicMock
+from uuid import uuid4
 
 from app.schemas.providers.hevy import HevyWorkout, HevyWorkoutEventsPage
 from app.services.providers.hevy.strength_storage import normalize_exercise_name, total_volume
+from app.services.providers.hevy.workouts import HevyWorkouts
 
 WORKOUT = {
     "id": "b459cba5-cd6d-463c-abd6-54f8eafcadcb",
@@ -49,3 +53,22 @@ def test_hevy_event_page_parses_updates_and_deletes() -> None:
 
 def test_exercise_name_normalization_keeps_variants_queryable() -> None:
     assert normalize_exercise_name("Squat (Barbell)") == "squat barbell"
+
+
+def test_live_load_scans_workout_list_before_reconciling_events() -> None:
+    service = HevyWorkouts()
+    db = MagicMock()
+    user_id = uuid4()
+    start = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
+    end = start + timedelta(hours=1)
+    workout = MagicMock()
+    service.get_workouts = MagicMock(return_value=[workout])  # type: ignore[method-assign]
+    service.ingest_workout = MagicMock()  # type: ignore[method-assign]
+    service.reconcile_events = MagicMock(return_value=2)  # type: ignore[method-assign]
+
+    processed = service.load_data(db, user_id, start=start, end=end)
+
+    assert processed == 3
+    service.get_workouts.assert_called_once_with(db, user_id, start - timedelta(minutes=5), end)
+    service.ingest_workout.assert_called_once_with(db, user_id, workout)
+    service.reconcile_events.assert_called_once_with(db, user_id, start - timedelta(minutes=5))

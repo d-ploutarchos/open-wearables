@@ -194,6 +194,15 @@ def disconnect_hevy(user_id: UUID, db: DbSession, auth: SDKAuthDep) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.get("/hevy/webhooks/{connection_id}", include_in_schema=False)
+def check_hevy_webhook(connection_id: UUID, db: DbSession) -> dict[str, str]:
+    """Return a harmless readiness response for provider URL probes."""
+    connection = connection_repo.get(db, connection_id)
+    if connection is None or connection.provider != "hevy" or connection.status != ConnectionStatus.ACTIVE:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown Hevy connection")
+    return {"status": "ready"}
+
+
 @router.post("/hevy/webhooks/{connection_id}")
 def receive_hevy_webhook(
     connection_id: UUID,

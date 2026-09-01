@@ -35,7 +35,7 @@ from .garmin.backfill_trigger import (
     trigger_backfill_for_type as trigger_garmin_backfill_for_type,
 )
 from .garmin.gc_task import gc_stuck_backfills
-from .hevy_workout_task import ingest_hevy_workout
+from .hevy_workout_task import ingest_hevy_workout, reconcile_all_hevy_workouts
 from .periodic_sync_task import sync_all_users
 from .process_aws_upload_task import complete_and_process_aws_upload, process_aws_upload
 from .process_sdk_upload_task import process_sdk_upload
@@ -79,6 +79,7 @@ __all__ = [
     "refresh_dashboard_total_data_points",
     "generate_seed_data",
     "ingest_hevy_workout",
+    "reconcile_all_hevy_workouts",
     "send_invitation_email_task",
     "process_webhook_push",
     "register_provider_webhooks",
