@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+from app.schemas.canonical_workout import CanonicalWorkoutResponse
 from app.schemas.enums import ProviderName
 from app.schemas.model_crud.activities import EventRecordDetailCreate
 from app.services.canonical_workout_service import CanonicalWorkoutService
@@ -151,3 +152,55 @@ def test_canonical_response_merges_hevy_structure_and_apple_physiology() -> None
         "max_heart_rate_bpm": "apple",
         "exercises": "hevy",
     }
+
+
+def test_canonical_history_returns_cursor_paginated_merged_workouts() -> None:
+    user_id = uuid4()
+    start = datetime(2026, 9, 1, 16, 0, tzinfo=timezone.utc)
+    first = SimpleNamespace(id=uuid4(), start_datetime=start)
+    extra = SimpleNamespace(id=uuid4(), start_datetime=start - timedelta(days=1))
+    merged = CanonicalWorkoutResponse(
+        id=first.id,
+        user_id=user_id,
+        type="strength_training",
+        name="Full Body B",
+        start_time=start,
+        end_time=start + timedelta(minutes=36),
+        duration_seconds=2160,
+        sources=[],
+        provenance={"name": "hevy"},
+    )
+    service = CanonicalWorkoutService()
+    service.repository = MagicMock()
+    service.repository.list_for_user.return_value = ([first, extra], 7)
+    service.get_response = MagicMock(return_value=merged)  # type: ignore[method-assign]
+    db = MagicMock()
+
+    response = service.list_responses(db, user_id, search="deadlift", limit=1)
+
+    assert response.data == [merged]
+    assert response.pagination.has_more is True
+    assert response.pagination.total_count == 7
+    assert response.pagination.next_cursor is not None
+    service.repository.list_for_user.assert_called_once_with(
+        db,
+        user_id,
+        start_datetime=None,
+        end_datetime=None,
+        search="deadlift",
+        cursor=None,
+        limit=1,
+    )
+
+
+def test_historical_backfill_is_silent_and_idempotent() -> None:
+    record_ids = [uuid4(), uuid4(), uuid4()]
+    canonical_id = uuid4()
+    service = CanonicalWorkoutService()
+    service.repository = MagicMock()
+    service.repository.list_unlinked_strength_record_ids.return_value = record_ids
+    service.ensure_for_record = MagicMock(  # type: ignore[method-assign]
+        side_effect=[SimpleNamespace(id=canonical_id), SimpleNamespace(id=canonical_id), None]
+    )
+
+    assert service.backfill(MagicMock(), limit=500) == (3, 1)

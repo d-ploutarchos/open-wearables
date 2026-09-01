@@ -14,6 +14,34 @@ strength_router = FastMCP(name="Strength Training Tools")
 
 
 @strength_router.tool
+async def list_canonical_workouts(
+    user_id: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    search: str | None = None,
+    cursor: str | None = None,
+    limit: int = 20,
+) -> dict:
+    """Search merged workout history by date, workout title, or exercise name.
+
+    Use this for session-level questions such as "show my squat workouts" or
+    "what training did I do last week?". Follow pagination.next_cursor when
+    pagination.has_more is true.
+    """
+    try:
+        return await client.list_canonical_workouts(
+            user_id,
+            start_datetime=f"{start_date}T00:00:00Z" if start_date else None,
+            end_datetime=f"{end_date}T23:59:59Z" if end_date else None,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+    except OpenWearablesError as exc:
+        return {"error": str(exc), "data": []}
+
+
+@strength_router.tool
 async def get_canonical_workout(user_id: str, canonical_workout_id: str) -> dict:
     """Get one merged workout with Hevy exercises, Apple physiology, source records, and field provenance."""
     try:

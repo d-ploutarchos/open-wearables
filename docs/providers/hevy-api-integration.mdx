@@ -55,6 +55,8 @@ curl --get \
 
 For Hevy and Apple strength sessions, `workout.created` is emitted after a short correlation window and uses the canonical workout ID. The payload is self-contained and includes merged metrics, exercises, `sources`, and `provenance`. Multiple provider arrivals therefore converge on one idempotent coaching event.
 
+Historical strength records are canonicalized silently by an idempotent background repair job. This makes sessions imported before canonical fusion available without replaying old coaching webhooks.
+
 ## Agent queries
 
 The REST API exposes stable exercise identities and set-derived history:
@@ -66,4 +68,6 @@ curl --get \
   --data-urlencode "search=squat"
 ```
 
-The MCP server provides `get_canonical_workout`, `list_strength_exercises`, and `get_strength_progress`. Exercise variants remain separate unless a caller explicitly selects the intended stable exercise ID. Estimated one-repetition maximum uses the Epley formula and is labelled as an estimate.
+Canonical workout history can be filtered by `start_datetime`, `end_datetime`, or `search`. Search matches both workout titles and exercise names and returns cursor-paginated merged workouts.
+
+The MCP server provides `list_canonical_workouts`, `get_canonical_workout`, `list_strength_exercises`, and `get_strength_progress`. Exercise variants remain separate unless a caller explicitly selects the intended stable exercise ID. Estimated one-repetition maximum uses the Epley formula and is labelled as an estimate.

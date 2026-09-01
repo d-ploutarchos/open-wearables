@@ -1,6 +1,11 @@
 from pytest_httpx import HTTPXMock
 
-from app.tools.strength import get_canonical_workout, get_strength_progress, list_strength_exercises
+from app.tools.strength import (
+    get_canonical_workout,
+    get_strength_progress,
+    list_canonical_workouts,
+    list_strength_exercises,
+)
 
 USER_ID = "00000000-0000-0000-0000-000000000000"
 EXERCISE_ID = "11111111-1111-1111-1111-111111111111"
@@ -25,6 +30,31 @@ async def test_get_canonical_workout_returns_merged_payload(httpx_mock: HTTPXMoc
     )
 
     assert await get_canonical_workout(USER_ID, CANONICAL_ID) == payload
+
+
+async def test_list_canonical_workouts_passes_history_filters(httpx_mock: HTTPXMock) -> None:
+    payload = {
+        "data": [{"id": CANONICAL_ID, "name": "Full Body B"}],
+        "pagination": {"next_cursor": None, "previous_cursor": None, "has_more": False, "total_count": 1},
+    }
+    httpx_mock.add_response(
+        method="GET",
+        url=(
+            f"https://api.test.com/api/v1/users/{USER_ID}/canonical-workouts?limit=10"
+            "&start_datetime=2026-08-01T00%3A00%3A00Z"
+            "&end_datetime=2026-09-01T23%3A59%3A59Z&search=deadlift"
+        ),
+        json=payload,
+    )
+
+    result = await list_canonical_workouts(
+        USER_ID,
+        start_date="2026-08-01",
+        end_date="2026-09-01",
+        search="deadlift",
+        limit=10,
+    )
+    assert result == payload
 
 
 async def test_list_strength_exercises_passes_search(httpx_mock: HTTPXMock) -> None:

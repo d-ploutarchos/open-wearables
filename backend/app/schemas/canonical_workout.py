@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.utils import Pagination
+
 
 class CanonicalWorkoutSourceResponse(BaseModel):
     event_record_id: UUID
@@ -28,3 +30,8 @@ class CanonicalWorkoutResponse(BaseModel):
     exercises: list[dict[str, Any]] | None = None
     sources: list[CanonicalWorkoutSourceResponse]
     provenance: dict[str, str]
+
+
+class CanonicalWorkoutListResponse(BaseModel):
+    data: list[CanonicalWorkoutResponse]
+    pagination: Pagination

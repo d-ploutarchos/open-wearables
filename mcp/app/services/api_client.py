@@ -263,6 +263,31 @@ class OpenWearablesClient:
             f"/api/v1/users/{user_id}/canonical-workouts/{canonical_workout_id}",
         )
 
+    async def list_canonical_workouts(
+        self,
+        user_id: str,
+        *,
+        start_datetime: str | None = None,
+        end_datetime: str | None = None,
+        search: str | None = None,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        params: dict[str, str | int] = {"limit": limit}
+        if start_datetime:
+            params["start_datetime"] = start_datetime
+        if end_datetime:
+            params["end_datetime"] = end_datetime
+        if search:
+            params["search"] = search
+        if cursor:
+            params["cursor"] = cursor
+        return await self._request(
+            "GET",
+            f"/api/v1/users/{user_id}/canonical-workouts",
+            params=params,
+        )
+
 
 # Singleton instance
 client = OpenWearablesClient()

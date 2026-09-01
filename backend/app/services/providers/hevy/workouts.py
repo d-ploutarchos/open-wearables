@@ -11,6 +11,7 @@ from app.repositories.user_connection_repository import UserConnectionRepository
 from app.schemas.enums import WorkoutType
 from app.schemas.model_crud.activities import EventRecordCreate, EventRecordDetailCreate
 from app.schemas.providers.hevy import HevyWorkout, HevyWorkoutEventsPage, HevyWorkoutPage
+from app.services.canonical_workout_service import canonical_workout_service
 from app.services.event_record_service import event_record_service
 from app.services.raw_payload_storage import store_raw_payload
 from app.utils.provider_credentials import decrypt_provider_credential
@@ -108,6 +109,7 @@ class HevyWorkouts:
 
         if existing is not None:
             self._replace_existing(db, user_id, existing, record, detail, workout)
+            canonical_workout_service.ensure_for_record(db, existing.id)
             return existing.id, False
 
         created = event_record_service.create(db, record)
@@ -115,9 +117,11 @@ class HevyWorkouts:
             # Another webhook worker inserted the same provider workout between our
             # external-id lookup and INSERT. Update it without emitting a second event.
             self._replace_existing(db, user_id, created, record, detail, workout)
+            canonical_workout_service.ensure_for_record(db, created.id)
             return created.id, False
         replace_strength_details(db, user_id, created.id, workout)
         event_record_service.create_detail(db, detail.model_copy(update={"record_id": created.id}))
+        canonical_workout_service.ensure_for_record(db, created.id)
         return created.id, True
 
     @staticmethod

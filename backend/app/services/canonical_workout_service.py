@@ -5,7 +5,13 @@ from uuid import UUID
 from app.database import DbSession
 from app.models import CanonicalWorkout, DataSource, EventRecord
 from app.repositories.canonical_workout_repository import CanonicalWorkoutRepository, WorkoutContext
-from app.schemas.canonical_workout import CanonicalWorkoutResponse, CanonicalWorkoutSourceResponse
+from app.schemas.canonical_workout import (
+    CanonicalWorkoutListResponse,
+    CanonicalWorkoutResponse,
+    CanonicalWorkoutSourceResponse,
+)
+from app.schemas.utils import Pagination
+from app.utils.pagination import encode_cursor
 
 
 class CanonicalWorkoutService:
@@ -163,6 +169,59 @@ class CanonicalWorkoutService:
             ],
             provenance=provenance,
         )
+
+    def list_responses(
+        self,
+        db: DbSession,
+        user_id: UUID,
+        *,
+        start_datetime: datetime | None = None,
+        end_datetime: datetime | None = None,
+        search: str | None = None,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> CanonicalWorkoutListResponse:
+        canonicals, total_count = self.repository.list_for_user(
+            db,
+            user_id,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            search=search,
+            cursor=cursor,
+            limit=limit,
+        )
+        has_more = len(canonicals) > limit
+        page = canonicals[:limit]
+        responses = [response for item in page if (response := self.get_response(db, item.id, user_id)) is not None]
+        next_cursor = encode_cursor(page[-1].start_datetime, page[-1].id) if has_more and page else None
+        return CanonicalWorkoutListResponse(
+            data=responses,
+            pagination=Pagination(
+                next_cursor=next_cursor,
+                previous_cursor=None,
+                has_more=has_more,
+                total_count=total_count,
+            ),
+        )
+
+    def backfill(
+        self,
+        db: DbSession,
+        *,
+        user_id: UUID | None = None,
+        start_datetime: datetime | None = None,
+        limit: int = 500,
+    ) -> tuple[int, int]:
+        record_ids = self.repository.list_unlinked_strength_record_ids(
+            db,
+            user_id=user_id,
+            start_datetime=start_datetime,
+            limit=limit,
+        )
+        canonical_ids = {
+            canonical.id for record_id in record_ids if (canonical := self.ensure_for_record(db, record_id)) is not None
+        }
+        return len(record_ids), len(canonical_ids)
 
 
 canonical_workout_service = CanonicalWorkoutService()

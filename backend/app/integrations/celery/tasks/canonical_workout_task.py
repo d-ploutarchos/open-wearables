@@ -1,3 +1,4 @@
+from datetime import datetime
 from logging import getLogger
 from uuid import UUID
 
@@ -9,6 +10,37 @@ from app.services.outgoing_webhooks.events import on_workout_created
 from app.utils.structured_logging import log_structured
 
 logger = getLogger(__name__)
+
+
+@shared_task
+def backfill_canonical_strength_workouts(
+    user_id: str | None = None,
+    start_datetime: str | None = None,
+    limit: int = 500,
+) -> dict[str, int]:
+    """Silently canonicalize historical or missed Apple/Hevy strength records."""
+    parsed_start = datetime.fromisoformat(start_datetime.replace("Z", "+00:00")) if start_datetime else None
+    with SessionLocal() as db:
+        records_processed, canonical_workouts = canonical_workout_service.backfill(
+            db,
+            user_id=UUID(user_id) if user_id else None,
+            start_datetime=parsed_start,
+            limit=limit,
+        )
+    log_structured(
+        logger,
+        "info",
+        "Canonical strength workout backfill completed",
+        provider="canonical",
+        action="canonical_workout_backfill_completed",
+        user_id=user_id,
+        records_processed=records_processed,
+        canonical_workouts=canonical_workouts,
+    )
+    return {
+        "records_processed": records_processed,
+        "canonical_workouts": canonical_workouts,
+    }
 
 
 @shared_task

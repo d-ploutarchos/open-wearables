@@ -157,6 +157,12 @@ def create_celery() -> Celery:
             "args": (),
             "kwargs": {},
         },
+        "backfill-canonical-strength-workouts": {
+            "task": "app.integrations.celery.tasks.canonical_workout_task.backfill_canonical_strength_workouts",
+            "schedule": 300.0,
+            "args": (),
+            "kwargs": {},
+        },
         "run-daily-archival": {
             "task": "app.integrations.celery.tasks.archival_task.run_daily_archival",
             "schedule": crontab(hour=3, minute=0),  # Daily at 03:00 UTC

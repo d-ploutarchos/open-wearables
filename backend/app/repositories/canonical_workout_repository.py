@@ -2,11 +2,21 @@ from datetime import datetime
 from typing import cast
 from uuid import UUID, uuid4
 
+from sqlalchemy import or_, tuple_
 from sqlalchemy.exc import IntegrityError
 
 from app.database import DbSession
-from app.models import CanonicalWorkout, CanonicalWorkoutSource, DataSource, EventRecord, WorkoutDetails
+from app.models import (
+    CanonicalWorkout,
+    CanonicalWorkoutSource,
+    DataSource,
+    EventRecord,
+    ExerciseDefinition,
+    WorkoutDetails,
+    WorkoutExercise,
+)
 from app.schemas.enums import ProviderName
+from app.utils.pagination import decode_cursor
 
 WorkoutContext = tuple[EventRecord, DataSource, WorkoutDetails | None]
 
@@ -27,6 +37,76 @@ class CanonicalWorkoutRepository:
             .filter(EventRecord.id == record_id)
             .one_or_none(),
         )
+
+    def list_for_user(
+        self,
+        db: DbSession,
+        user_id: UUID,
+        *,
+        start_datetime: datetime | None = None,
+        end_datetime: datetime | None = None,
+        search: str | None = None,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> tuple[list[CanonicalWorkout], int]:
+        query = db.query(CanonicalWorkout).filter(CanonicalWorkout.user_id == user_id)
+        if start_datetime is not None:
+            query = query.filter(CanonicalWorkout.start_datetime >= start_datetime)
+        if end_datetime is not None:
+            query = query.filter(CanonicalWorkout.start_datetime <= end_datetime)
+        if search:
+            pattern = f"%{search.strip()}%"
+            exercise_match = (
+                db.query(CanonicalWorkoutSource.id)
+                .join(WorkoutExercise, WorkoutExercise.record_id == CanonicalWorkoutSource.event_record_id)
+                .join(ExerciseDefinition, ExerciseDefinition.id == WorkoutExercise.exercise_definition_id)
+                .filter(
+                    CanonicalWorkoutSource.canonical_workout_id == CanonicalWorkout.id,
+                    ExerciseDefinition.name.ilike(pattern),
+                )
+                .exists()
+            )
+            query = query.filter(or_(CanonicalWorkout.name.ilike(pattern), exercise_match))
+
+        total_count = query.count()
+        if cursor:
+            cursor_time, cursor_id, direction = decode_cursor(cursor)
+            boundary = tuple_(CanonicalWorkout.start_datetime, CanonicalWorkout.id)
+            if direction == "prev":
+                query = query.filter(boundary > (cursor_time, cursor_id))
+            else:
+                query = query.filter(boundary < (cursor_time, cursor_id))
+
+        return (
+            query.order_by(CanonicalWorkout.start_datetime.desc(), CanonicalWorkout.id.desc()).limit(limit + 1).all(),
+            total_count,
+        )
+
+    def list_unlinked_strength_record_ids(
+        self,
+        db: DbSession,
+        *,
+        user_id: UUID | None = None,
+        start_datetime: datetime | None = None,
+        limit: int = 500,
+    ) -> list[UUID]:
+        query = (
+            db.query(EventRecord.id)
+            .join(DataSource, EventRecord.data_source_id == DataSource.id)
+            .outerjoin(CanonicalWorkoutSource, CanonicalWorkoutSource.event_record_id == EventRecord.id)
+            .filter(
+                CanonicalWorkoutSource.id.is_(None),
+                DataSource.provider.in_([ProviderName.HEVY, ProviderName.APPLE]),
+                EventRecord.category == "workout",
+                EventRecord.type == "strength_training",
+            )
+            .order_by(EventRecord.start_datetime.asc(), EventRecord.id.asc())
+        )
+        if user_id is not None:
+            query = query.filter(DataSource.user_id == user_id)
+        if start_datetime is not None:
+            query = query.filter(EventRecord.start_datetime >= start_datetime)
+        return [record_id for (record_id,) in query.limit(limit).all()]
 
     def find_overlapping_records(
         self,
