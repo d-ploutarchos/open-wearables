@@ -42,6 +42,12 @@ class WebhookEventType(StrEnum):
     MENSTRUAL_CYCLE_CREATED = "menstrual_cycle.created"
 
     # -------------------------------------------------------------------------
+    # Coaching intelligence (scheduled, user-scoped)
+    # -------------------------------------------------------------------------
+    COACHING_WEEKLY_REVIEW_CREATED = "coaching.weekly_review.created"
+    COACHING_LOAD_ALERT_CREATED = "coaching.load_alert.created"
+
+    # -------------------------------------------------------------------------
     # TimeSeries — GROUP events (one per category)
     # Subscribe to a group to receive all metrics within that category.
     # -------------------------------------------------------------------------
@@ -210,6 +216,12 @@ EVENT_TYPE_DESCRIPTIONS: dict[WebhookEventType, str] = {
     WebhookEventType.WORKOUT_CREATED: "A new workout session was saved.",
     WebhookEventType.SLEEP_CREATED: "A new (or merged) sleep session was saved.",
     WebhookEventType.MENSTRUAL_CYCLE_CREATED: "A new menstrual cycle record was saved.",
+    WebhookEventType.COACHING_WEEKLY_REVIEW_CREATED: (
+        "A weekly evidence package covering training load, recovery context, and athletic progress was generated."
+    ),
+    WebhookEventType.COACHING_LOAD_ALERT_CREATED: (
+        "A material workload change, or elevated workload combined with declining recovery, was detected."
+    ),
     # Group events
     WebhookEventType.HEART_RATE_CREATED: "Any heart-rate samples (all HR variants) were ingested.",
     WebhookEventType.HEART_RATE_VARIABILITY_CREATED: "Any HRV samples (SDNN or RMSSD) were ingested.",

@@ -190,6 +190,38 @@ def on_sleep_created(
     )
 
 
+def on_coaching_weekly_review_created(
+    *,
+    user_id: UUID,
+    period_key: str,
+    payload: dict[str, Any],
+) -> None:
+    """Emit one user-scoped coaching review per ISO week."""
+    event_type = WebhookEventType.COACHING_WEEKLY_REVIEW_CREATED
+    _dispatch(
+        event_type,
+        {"type": event_type, "data": payload},
+        idempotency_key=_safe_key(f"coaching.weekly_review.{user_id}.{period_key}"),
+        channels=[f"user.{user_id}"],
+    )
+
+
+def on_coaching_load_alert_created(
+    *,
+    user_id: UUID,
+    local_date: str,
+    payload: dict[str, Any],
+) -> None:
+    """Emit at most one user-scoped load alert per local calendar day."""
+    event_type = WebhookEventType.COACHING_LOAD_ALERT_CREATED
+    _dispatch(
+        event_type,
+        {"type": event_type, "data": payload},
+        idempotency_key=_safe_key(f"coaching.load_alert.{user_id}.{local_date}"),
+        channels=[f"user.{user_id}"],
+    )
+
+
 def on_timeseries_batch_saved(
     *,
     user_id: UUID,

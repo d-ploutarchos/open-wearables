@@ -71,3 +71,22 @@ Use the MCP tool `get_training_load` for questions such as:
 - “Did my running load spike?”
 - “Which muscle groups have I trained recently?”
 - “How does my recent sleep look alongside my workload?”
+
+## Proactive coaching events
+
+Bionic can notify an agent without waiting for the user to ask a question. The backend evaluates each user at approximately 08:10 in the user's latest recorded UTC offset and emits two user-scoped outgoing webhook types:
+
+- `coaching.weekly_review.created` — emitted on Monday with the complete training-load and coaching-progress evidence packages
+- `coaching.load_alert.created` — emitted when at least two load metrics spike, one metric reaches 1.75× its baseline, or elevated load coincides with an 8-point-or-greater decline in sleep/recovery context
+
+Stable Svix event IDs limit each weekly review to one event per ISO week and each load alert to one event per local calendar day, including after retries or scheduler restarts. A Monday weekly review suppresses a same-morning load alert so the agent sends one consolidated message. Recovery decline alone does not emit this event because sleep webhooks already provide the morning recovery trigger.
+
+The events intentionally contain structured evidence rather than generated advice. The receiving agent applies its own coaching prompt, goals, constraints, conversation history, and delivery channel. Every payload includes an `evidence_policy` warning against causal, diagnostic, or injury-risk claims.
+
+Preview the event decision without sending anything:
+
+```http
+GET /api/v1/users/{user_id}/coaching/proactive-preview
+```
+
+The preview returns the effective local date and UTC offset, whether a weekly review is due, and the exact weekly-review or load-alert payload that would be emitted. If no recent record has a timezone offset, scheduling falls back to UTC.

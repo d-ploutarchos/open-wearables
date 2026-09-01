@@ -44,6 +44,7 @@ from .garmin.gc_task import gc_stuck_backfills
 from .hevy_workout_task import ingest_hevy_workout, reconcile_all_hevy_workouts
 from .performance_record_task import backfill_running_performance_records, backfill_strength_performance_records
 from .periodic_sync_task import sync_all_users
+from .proactive_coaching_task import dispatch_proactive_coaching_events
 from .process_aws_upload_task import complete_and_process_aws_upload, process_aws_upload
 from .process_sdk_upload_task import process_sdk_upload
 from .process_xml_upload_task import process_xml_upload
@@ -99,4 +100,5 @@ __all__ = [
     "renew_oura_webhooks",
     # Outgoing webhooks
     "emit_webhook_event",
+    "dispatch_proactive_coaching_events",
 ]

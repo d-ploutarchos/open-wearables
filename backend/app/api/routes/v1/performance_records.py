@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from app.database import DbSession
+from app.schemas.coaching_events import ProactiveCoachingPreview
 from app.schemas.performance_records import (
     CoachingProgressResponse,
     PerformanceRecordHistoryResponse,
@@ -13,9 +14,20 @@ from app.schemas.training_load import TrainingLoadResponse
 from app.services import ApiKeyDep
 from app.services.coaching_progress_service import coaching_progress_service
 from app.services.performance_record_service import performance_record_service
+from app.services.proactive_coaching_service import proactive_coaching_service
 from app.services.training_load_service import training_load_service
 
 router = APIRouter()
+
+
+@router.get("/users/{user_id}/coaching/proactive-preview")
+def get_proactive_coaching_preview(
+    user_id: UUID,
+    db: DbSession,
+    _api_key: ApiKeyDep,
+) -> ProactiveCoachingPreview:
+    """Preview today's structured coaching events without sending webhooks."""
+    return proactive_coaching_service.preview(db, user_id)
 
 
 @router.get("/users/{user_id}/coaching/training-load")

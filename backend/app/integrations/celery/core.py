@@ -181,6 +181,12 @@ def create_celery() -> Celery:
             "args": (),
             "kwargs": {},
         },
+        "dispatch-proactive-coaching-events": {
+            "task": "app.integrations.celery.tasks.proactive_coaching_task.dispatch_proactive_coaching_events",
+            "schedule": crontab(minute=10),  # Hourly; each user is evaluated only at 08:10 local time.
+            "args": (),
+            "kwargs": {},
+        },
         "run-daily-archival": {
             "task": "app.integrations.celery.tasks.archival_task.run_daily_archival",
             "schedule": crontab(hour=3, minute=0),  # Daily at 03:00 UTC

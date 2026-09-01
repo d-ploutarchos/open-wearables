@@ -110,6 +110,42 @@ EXAMPLE_PAYLOADS: dict[str, dict] = {
             "is_nap": False,
         },
     },
+    WebhookEventType.COACHING_WEEKLY_REVIEW_CREATED: {
+        "type": WebhookEventType.COACHING_WEEKLY_REVIEW_CREATED,
+        "data": {
+            "user_id": _USER_ID,
+            "generated_at": "2026-09-07T07:10:00+00:00",
+            "local_date": "2026-09-07",
+            "zone_offset": "+01:00",
+            "period_key": "2026-W37",
+            "training_load": {"window_days": 7, "metrics": []},
+            "progress": {"window_days": 42, "strength": [], "running": []},
+            "evidence_policy": "Observational signals only; do not claim causation, diagnosis, or injury risk.",
+        },
+    },
+    WebhookEventType.COACHING_LOAD_ALERT_CREATED: {
+        "type": WebhookEventType.COACHING_LOAD_ALERT_CREATED,
+        "data": {
+            "user_id": _USER_ID,
+            "generated_at": "2026-09-01T07:10:00+00:00",
+            "local_date": "2026-09-01",
+            "zone_offset": "+01:00",
+            "signals": [
+                {
+                    "kind": "workload_spike",
+                    "severity": "moderate",
+                    "metric": "running_distance",
+                    "current": 32.0,
+                    "baseline": 18.0,
+                    "ratio": 1.78,
+                    "change": None,
+                    "unit": "km",
+                }
+            ],
+            "training_load": {"window_days": 7, "metrics": []},
+            "evidence_policy": "Observational signals only; do not claim causation, diagnosis, or injury risk.",
+        },
+    },
     # ------------------------------------------------------------------
     # Timeseries — GROUP events
     # ------------------------------------------------------------------
