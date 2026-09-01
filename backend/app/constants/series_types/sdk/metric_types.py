@@ -162,6 +162,13 @@ class SDKMetricType(StrEnum):
     ANDROID_CYCLING_PEDALING_CADENCE = "CYCLING_PEDALING_CADENCE"
     ANDROID_TOTAL_CALORIES_BURNED = "TOTAL_CALORIES_BURNED"
 
+    # Nutrition
+    APPLE_DIETARY_ENERGY_CONSUMED = "HKQuantityTypeIdentifierDietaryEnergyConsumed"
+    APPLE_DIETARY_CARBOHYDRATES = "HKQuantityTypeIdentifierDietaryCarbohydrates"
+    APPLE_DIETARY_PROTEIN = "HKQuantityTypeIdentifierDietaryProtein"
+    APPLE_DIETARY_FAT_TOTAL = "HKQuantityTypeIdentifierDietaryFatTotal"
+    APPLE_DIETARY_WATER = "HKQuantityTypeIdentifierDietaryWater"
+
     # Winter/Snow Sports
     CROSS_COUNTRY_SKIING_SPEED = "HKQuantityTypeIdentifierCrossCountrySkiingSpeed"
 
@@ -274,6 +281,12 @@ METRIC_TYPE_TO_SERIES_TYPE: dict[SDKMetricType, SeriesType] = {
     SDKMetricType.ANDROID_SPEED: SeriesType.speed,
     SDKMetricType.ANDROID_CYCLING_PEDALING_CADENCE: SeriesType.cadence,
     SDKMetricType.ANDROID_TOTAL_CALORIES_BURNED: SeriesType.energy,
+    # Nutrition
+    SDKMetricType.APPLE_DIETARY_ENERGY_CONSUMED: SeriesType.dietary_energy_consumed,
+    SDKMetricType.APPLE_DIETARY_CARBOHYDRATES: SeriesType.dietary_carbohydrates,
+    SDKMetricType.APPLE_DIETARY_PROTEIN: SeriesType.dietary_protein,
+    SDKMetricType.APPLE_DIETARY_FAT_TOTAL: SeriesType.dietary_fat_total,
+    SDKMetricType.APPLE_DIETARY_WATER: SeriesType.dietary_water,
     # Environmental
     SDKMetricType.ENVIRONMENTAL_AUDIO_EXPOSURE: SeriesType.environmental_audio_exposure,
     SDKMetricType.HEADPHONE_AUDIO_EXPOSURE: SeriesType.headphone_audio_exposure,

@@ -46,6 +46,9 @@ class TestWebhookEventTypes:
         for evt in WebhookEventType:
             assert evt in EVENT_TYPE_DESCRIPTIONS, f"Missing description for {evt}"
 
+    def test_nutrition_group_is_available(self) -> None:
+        assert WebhookEventType.NUTRITION_CREATED.value == "nutrition.created"
+
     def test_values_follow_convention(self) -> None:
         for evt in WebhookEventType:
             assert "." in evt.value, f"{evt} should follow resource.action convention"

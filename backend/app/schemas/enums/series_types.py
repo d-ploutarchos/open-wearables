@@ -156,6 +156,15 @@ class SeriesType(str, Enum):
     garmin_body_battery = "garmin_body_battery"  # Garmin body battery (0-100)
 
     # =========================================================================
+    # NUTRITION (IDs 300-319)
+    # =========================================================================
+    dietary_energy_consumed = "dietary_energy_consumed"
+    dietary_carbohydrates = "dietary_carbohydrates"
+    dietary_protein = "dietary_protein"
+    dietary_fat_total = "dietary_fat_total"
+    dietary_water = "dietary_water"
+
+    # =========================================================================
     # OTHER (IDs 500-)
     # =========================================================================
 
@@ -298,6 +307,14 @@ SERIES_TYPE_DEFINITIONS: list[tuple[int, SeriesType, str]] = [
     (222, SeriesType.garmin_fitness_age, "years"),
     (223, SeriesType.garmin_body_battery, "percent"),
     # -------------------------------------------------------------------------
+    # NUTRITION (IDs 300-319)
+    # -------------------------------------------------------------------------
+    (300, SeriesType.dietary_energy_consumed, "kcal"),
+    (301, SeriesType.dietary_carbohydrates, "g"),
+    (302, SeriesType.dietary_protein, "g"),
+    (303, SeriesType.dietary_fat_total, "g"),
+    (304, SeriesType.dietary_water, "mL"),
+    # -------------------------------------------------------------------------
     # OTHER (IDs 500-)
     # -------------------------------------------------------------------------
     (500, SeriesType.electrodermal_activity, "count"),
@@ -363,6 +380,7 @@ _CATEGORY_RANGES: list[tuple[range, str]] = [
     (range(180, 200), "Activity - Generic"),
     (range(200, 220), "Environmental"),
     (range(220, 240), "Provider-Specific"),
+    (range(300, 320), "Nutrition"),
     (range(500, 600), "Other"),
 ]
 

@@ -61,6 +61,7 @@ class WebhookEventType(StrEnum):
     ACTIVITY_CREATED_TIMESERIES = "activity_timeseries.created"
     WORKOUT_METRICS_CREATED = "workout_metrics.created"
     ENVIRONMENTAL_CREATED = "environmental.created"
+    NUTRITION_CREATED = "nutrition.created"
 
     # -------------------------------------------------------------------------
     # TimeSeries — GRANULAR events (one per SeriesType slug)
@@ -134,6 +135,13 @@ class WebhookEventType(StrEnum):
     SERIES_STEPS = "series.steps.created"
     SERIES_ENERGY = "series.energy.created"
     SERIES_BASAL_ENERGY = "series.basal_energy.created"
+
+    # Nutrition
+    SERIES_DIETARY_ENERGY_CONSUMED = "series.dietary_energy_consumed.created"
+    SERIES_DIETARY_CARBOHYDRATES = "series.dietary_carbohydrates.created"
+    SERIES_DIETARY_PROTEIN = "series.dietary_protein.created"
+    SERIES_DIETARY_FAT_TOTAL = "series.dietary_fat_total.created"
+    SERIES_DIETARY_WATER = "series.dietary_water.created"
 
     # Activity basic
     SERIES_STAND_TIME = "series.stand_time.created"
@@ -225,6 +233,7 @@ EVENT_TYPE_DESCRIPTIONS: dict[WebhookEventType, str] = {
     WebhookEventType.ENVIRONMENTAL_CREATED: (
         "Any environmental samples (audio exposure, UV, weather, etc.) were ingested."
     ),
+    WebhookEventType.NUTRITION_CREATED: "New dietary energy, macronutrient, or water samples were ingested.",
     # Granular series events
     WebhookEventType.SERIES_HEART_RATE: "Continuous heart-rate samples were ingested.",
     WebhookEventType.SERIES_RESTING_HEART_RATE: "Resting heart-rate samples were ingested.",
@@ -271,6 +280,11 @@ EVENT_TYPE_DESCRIPTIONS: dict[WebhookEventType, str] = {
     WebhookEventType.SERIES_STEPS: "Step count samples were ingested.",
     WebhookEventType.SERIES_ENERGY: "Active energy (calories) samples were ingested.",
     WebhookEventType.SERIES_BASAL_ENERGY: "Basal energy samples were ingested.",
+    WebhookEventType.SERIES_DIETARY_ENERGY_CONSUMED: "Dietary energy samples were ingested.",
+    WebhookEventType.SERIES_DIETARY_CARBOHYDRATES: "Dietary carbohydrate samples were ingested.",
+    WebhookEventType.SERIES_DIETARY_PROTEIN: "Dietary protein samples were ingested.",
+    WebhookEventType.SERIES_DIETARY_FAT_TOTAL: "Dietary total-fat samples were ingested.",
+    WebhookEventType.SERIES_DIETARY_WATER: "Dietary water samples were ingested.",
     WebhookEventType.SERIES_STAND_TIME: "Stand time samples were ingested.",
     WebhookEventType.SERIES_EXERCISE_TIME: "Exercise time samples were ingested.",
     WebhookEventType.SERIES_PHYSICAL_EFFORT: "Physical effort samples were ingested.",
@@ -390,6 +404,13 @@ EVENT_TYPE_GROUPS: dict[str, list[str]] = {
     WebhookEventType.CALORIES_CREATED: [
         WebhookEventType.SERIES_ENERGY,
         WebhookEventType.SERIES_BASAL_ENERGY,
+    ],
+    WebhookEventType.NUTRITION_CREATED: [
+        WebhookEventType.SERIES_DIETARY_ENERGY_CONSUMED,
+        WebhookEventType.SERIES_DIETARY_CARBOHYDRATES,
+        WebhookEventType.SERIES_DIETARY_PROTEIN,
+        WebhookEventType.SERIES_DIETARY_FAT_TOTAL,
+        WebhookEventType.SERIES_DIETARY_WATER,
     ],
     WebhookEventType.ACTIVITY_CREATED_TIMESERIES: [
         WebhookEventType.SERIES_STAND_TIME,
