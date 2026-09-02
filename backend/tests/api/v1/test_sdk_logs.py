@@ -248,6 +248,12 @@ class TestSDKLogsEventFields:
         assert fields["samples_expected"] == 715
         assert "data_type" not in fields
 
+    def test_bridge_heartbeat_timestamps_are_json_serializable(self) -> None:
+        fields = _event_fields(SDKLogRequest(**_payload(BRIDGE_HEARTBEAT_EVENT)))
+
+        assert fields["last_sync_requested_at"] == "2026-09-02T08:15:00+00:00"
+        assert fields["last_healthkit_event_at"] == "2026-09-02T08:15:00+00:00"
+
 
 class TestSDKLogsAuth:
     @patch("app.api.routes.v1.sdk_logs.store_raw_payload")

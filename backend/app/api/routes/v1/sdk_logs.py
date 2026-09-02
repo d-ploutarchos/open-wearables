@@ -75,9 +75,15 @@ def _event_fields(body: SDKLogRequest) -> dict[str, Any]:
             case BridgeHeartbeatEvent():
                 fields |= {
                     "trigger": event.trigger,
-                    "last_sync_requested_at": event.lastSyncRequestedAt,
-                    "last_sync_completed_at": event.lastSyncCompletedAt,
-                    "last_healthkit_event_at": event.lastHealthKitEventAt,
+                    "last_sync_requested_at": (
+                        event.lastSyncRequestedAt.isoformat() if event.lastSyncRequestedAt else None
+                    ),
+                    "last_sync_completed_at": (
+                        event.lastSyncCompletedAt.isoformat() if event.lastSyncCompletedAt else None
+                    ),
+                    "last_healthkit_event_at": (
+                        event.lastHealthKitEventAt.isoformat() if event.lastHealthKitEventAt else None
+                    ),
                     "bridge_error": event.lastError,
                     "background_delivery_failures": sum(
                         1 for success in event.backgroundDeliveryStatus.values() if not success
