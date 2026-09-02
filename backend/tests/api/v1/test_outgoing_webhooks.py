@@ -136,6 +136,12 @@ class TestWebhookEmit:
             }
         ]
         provenance = {"name": "hevy", "exercises": "hevy", "calories_kcal": "apple"}
+        coaching_context = {
+            "strength": [{"exercise_name": "Back Squat", "status": "progressing"}],
+            "running": [],
+            "has_personal_record": True,
+            "has_plateau_signal": False,
+        }
         on_workout_created(
             record_id=canonical_id,
             canonical_id=canonical_id,
@@ -150,6 +156,7 @@ class TestWebhookEmit:
             duration_seconds=3600,
             sources=sources,
             provenance=provenance,
+            coaching_context=coaching_context,
         )
 
         payload = mock_task.delay.call_args.args[1]
@@ -157,6 +164,7 @@ class TestWebhookEmit:
         assert payload["data"]["canonical_id"] == str(canonical_id)
         assert payload["data"]["sources"] == sources
         assert payload["data"]["provenance"] == provenance
+        assert payload["data"]["coaching_context"] == coaching_context
 
     @patch("app.integrations.celery.tasks.emit_webhook_event_task.emit_webhook_event")
     def test_on_sleep_created_dispatches(self, mock_task: MagicMock) -> None:

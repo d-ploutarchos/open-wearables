@@ -74,6 +74,12 @@ class OpenWearablesClient:
 
         return await self._request("GET", "/api/v1/users", params=params)
 
+    async def get_configured_user(self) -> dict[str, Any] | None:
+        """Return the explicitly scoped user, when configured for Bionic."""
+        if not settings.open_wearables_user_id:
+            return None
+        return await self.get_user(settings.open_wearables_user_id)
+
     async def get_user(self, user_id: str) -> dict[str, Any]:
         """
         Get a specific user by ID.
@@ -336,12 +342,11 @@ class OpenWearablesClient:
             params["exercise_id"] = exercise_id
         if distance_meters:
             params["distance_meters"] = distance_meters
-        response = await self._request(
+        return await self._request(
             "GET",
             f"/api/v1/users/{user_id}/coaching/progress",
             params=params,
         )
-        return cast(dict[str, Any], response)
 
     async def get_training_load(
         self,
@@ -350,12 +355,11 @@ class OpenWearablesClient:
         window_days: int = 7,
         baseline_days: int = 28,
     ) -> dict[str, Any]:
-        response = await self._request(
+        return await self._request(
             "GET",
             f"/api/v1/users/{user_id}/coaching/training-load",
             params={"window_days": window_days, "baseline_days": baseline_days},
         )
-        return cast(dict[str, Any], response)
 
     async def list_performance_record_history(
         self,

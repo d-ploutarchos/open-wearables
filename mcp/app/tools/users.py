@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 from fastmcp import FastMCP
 
@@ -62,10 +63,16 @@ async def get_users(search: str | None = None, limit: int = 10) -> dict:
         - If 'total' exceeds the number of returned users, use 'search' to narrow results
     """
     try:
-        response = await client.get_users(search=search, limit=limit)
+        configured_user = await client.get_configured_user()
+        response: dict[str, Any]
+        if configured_user is not None:
+            response = {"items": [configured_user], "total": 1}
+        else:
+            response = await client.get_users(search=search, limit=limit)
 
         # Extract user data from paginated response
-        users = response.get("items", [])
+        users_value = response.get("items", [])
+        users = users_value if isinstance(users_value, list) else []
 
         return {
             "users": [

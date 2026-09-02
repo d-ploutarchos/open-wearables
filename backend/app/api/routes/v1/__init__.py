@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from .api_keys import router as api_keys_router
+from .agent_credentials import router as agent_credentials_router
 from .applications import router as applications_router
 from .archival import router as archival_router
 from .auth import router as auth_router
@@ -9,6 +10,7 @@ from .config import router as config_router
 from .connections import router as connections_router
 from .dashboard import router as dashboard_router
 from .data_sources import router as data_sources_router
+from .delivery_receipts import router as delivery_receipts_router
 from .deprecated_webhooks import router as deprecated_webhooks_router
 from .developers import router as developers_router
 from .events import router as events_router
@@ -57,6 +59,8 @@ v1_router.include_router(sync_status_router, tags=["External: Sync Status"])
 v1_router.include_router(vendor_workouts_router, prefix="/providers", tags=["System: Vendor Workouts"])
 v1_router.include_router(import_xml_router, tags=["External: Apple Health Import"])
 v1_router.include_router(sdk_logs_router, tags=["External: Mobile SDK"])
+v1_router.include_router(agent_credentials_router, tags=["External: Mobile SDK"])
+v1_router.include_router(delivery_receipts_router, tags=["External: Mobile SDK"])
 v1_router.include_router(sdk_sync_router, tags=["External: Mobile SDK"])
 v1_router.include_router(sdk_token_router, tags=["External: Mobile SDK"])
 v1_router.include_router(hevy_router, tags=["External: Hevy"])

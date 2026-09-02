@@ -3,12 +3,13 @@ from logging import Logger, getLogger
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request, status
 
 from app.database import DbSession
 from app.models import ApiKey, Developer
 from app.repositories.api_key_repository import ApiKeyRepository
 from app.schemas.model_crud.credentials import ApiKeyCreate, ApiKeyUpdate
+from app.services.agent_credential_service import agent_credential_service
 from app.services.services import AppService
 from app.utils.auth import get_current_developer_optional
 
@@ -58,12 +59,28 @@ api_key_service = ApiKeyService(log=getLogger(__name__))
 
 async def _require_api_key(
     db: DbSession,
+    request: Request,
     developer: Developer | None = Depends(get_current_developer_optional),
     x_open_wearables_api_key: str | None = Header(None, alias="X-Open-Wearables-API-Key"),
 ) -> str:
     if developer:
         return str(developer.id)
     if x_open_wearables_api_key:
+        if x_open_wearables_api_key.startswith("ow-agent-"):
+            credential = agent_credential_service.validate(db, x_open_wearables_api_key)
+            requested_user_id = request.path_params.get("user_id")
+            if request.method not in {"GET", "HEAD"}:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Agent credentials are read-only",
+                )
+            if requested_user_id is None or str(requested_user_id) != str(credential.user_id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Agent credential does not grant access to this user",
+                )
+            agent_credential_service.mark_used(db, credential)
+            return f"agent:{credential.id}"
         return api_key_service.validate_api_key(db, x_open_wearables_api_key).id
     raise HTTPException(status_code=401, detail="Authentication required: provide JWT token or API key")
 

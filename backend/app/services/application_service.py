@@ -92,6 +92,9 @@ class ApplicationService(AppService[ApplicationRepository, Application, Applicat
         self.logger.debug(f"Listed {len(applications)} applications for developer {developer_id}")
         return applications
 
+    def get_by_app_id(self, db: DbSession, app_id: str) -> Application | None:
+        return self.crud.get_by_app_id(db, app_id)
+
     def delete_application(self, db: DbSession, app_id: str, developer_id: UUID) -> None:
         """Delete an application by app_id, verifying ownership.
 

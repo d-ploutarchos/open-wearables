@@ -25,6 +25,10 @@ class Settings(BaseSettings):
         default=SecretStr(""),
         description="API key for authenticating with Open Wearables backend",
     )
+    open_wearables_user_id: str | None = Field(
+        default=None,
+        description="Optional user UUID paired with a user-scoped Bionic agent credential",
+    )
 
     # Optional settings
     log_level: str = Field(default="INFO", description="Logging level")

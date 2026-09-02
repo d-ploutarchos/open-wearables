@@ -1,4 +1,5 @@
 from .api_key import ApiKey
+from .agent_credential import AgentCredential
 from .application import Application
 from .archival_setting import ArchivalSetting
 from .canonical_workout import CanonicalWorkout
@@ -8,6 +9,7 @@ from .data_point_series_archive import DataPointSeriesArchive
 from .data_source import DataSource
 from .developer import Developer
 from .device_type_priority import DeviceTypePriority
+from .delivery_receipt import DeliveryReceipt
 from .event_record import EventRecord
 from .event_record_detail import DetailType, EventRecordDetail
 from .exercise_definition import ExerciseDefinition
@@ -39,6 +41,7 @@ DETAIL_MODELS: dict[DetailType, type[EventRecordDetail]] = {
 
 __all__ = [
     "ApiKey",
+    "AgentCredential",
     "Application",
     "ArchivalSetting",
     "CanonicalWorkout",
@@ -47,6 +50,7 @@ __all__ = [
     "DataSource",
     "DataPointSeriesArchive",
     "DeviceTypePriority",
+    "DeliveryReceipt",
     "Invitation",
     "ProviderPriority",
     "ProviderSetting",

@@ -292,6 +292,15 @@
             "group": "Mobile SDK",
             "pages": [
               "POST /api/v1/sdk/users/{user_id}/sync",
+              "POST /api/v1/sdk/users/{user_id}/delivery-receipts",
+              "GET /api/v1/sdk/users/{user_id}/delivery-receipts",
+              "POST /api/v1/sdk/users/{user_id}/agent-credentials",
+              "GET /api/v1/sdk/users/{user_id}/agent-credentials",
+              "DELETE /api/v1/sdk/users/{user_id}/agent-credentials/{credential_id}",
+              "GET /api/v1/sdk/users/{user_id}/agent-credentials/{credential_id}/contact",
+              "PUT /api/v1/sdk/users/{user_id}/agent-credentials/{credential_id}/webhook",
+              "POST /api/v1/sdk/users/{user_id}/agent-credentials/{credential_id}/webhook/test",
+              "DELETE /api/v1/sdk/users/{user_id}/agent-credentials/{credential_id}/webhook",
               "POST /api/v1/users/{user_id}/token",
               "POST /api/v1/users/{user_id}/invitation-code",
               "POST /api/v1/invitation-code/redeem"

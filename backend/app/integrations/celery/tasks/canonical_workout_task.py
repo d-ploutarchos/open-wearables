@@ -4,13 +4,51 @@ from uuid import UUID
 
 from celery import shared_task
 
-from app.database import SessionLocal
+from app.database import DbSession, SessionLocal
+from app.schemas.canonical_workout import CanonicalWorkoutResponse
 from app.services.canonical_workout_service import canonical_workout_service
+from app.services.coaching_progress_service import coaching_progress_service
 from app.services.outgoing_webhooks.events import on_workout_created
 from app.services.performance_record_service import performance_record_service
 from app.utils.structured_logging import log_structured
 
 logger = getLogger(__name__)
+
+
+def _coaching_context(db: DbSession, response: CanonicalWorkoutResponse) -> dict[str, object]:
+    """Return only progression signals produced by this workout."""
+    try:
+        progress = coaching_progress_service.get_progress(db, response.user_id)
+    except Exception:
+        logger.warning(
+            "Could not build coaching context for canonical workout %s",
+            response.id,
+            exc_info=True,
+        )
+        return {
+            "strength": [],
+            "running": [],
+            "has_personal_record": False,
+            "has_plateau_signal": False,
+            "context_status": "unavailable",
+        }
+    strength = [
+        item.model_dump(mode="json") for item in progress.strength if item.latest_performed_at == response.start_time
+    ]
+    running = [
+        item.model_dump(mode="json") for item in progress.running if item.latest_performed_at == response.start_time
+    ]
+    return {
+        "strength": strength,
+        "running": running,
+        "has_personal_record": False,
+        "has_plateau_signal": any(item["status"] == "plateau" for item in [*strength, *running]),
+        "context_status": "available",
+        "evidence_policy": (
+            "Treat progression and plateau labels as observational coaching signals, not as injury, "
+            "medical, or causal conclusions."
+        ),
+    }
 
 
 @shared_task
@@ -83,6 +121,10 @@ def emit_canonical_strength_workout(record_id: str) -> dict[str, str | bool]:
         if response is None:
             return {"emitted": False, "reason": "canonical_workout_incomplete"}
         strength_analysis = performance_record_service.analyze_strength_workout(db, canonical.id)
+        coaching_context = _coaching_context(db, response)
+        coaching_context["has_personal_record"] = any(
+            item.change_type in {"created", "restored", "improved"} for item in strength_analysis.records_changed
+        )
 
         primary_provider = response.provenance.get("name", "canonical")
         primary_source = next((source for source in response.sources if source.provider == primary_provider), None)
@@ -106,6 +148,7 @@ def emit_canonical_strength_workout(record_id: str) -> dict[str, str | bool]:
             sources=[source.model_dump(mode="json") for source in response.sources],
             provenance=response.provenance,
             performance_records=[item.model_dump(mode="json") for item in strength_analysis.records_changed],
+            coaching_context=coaching_context,
         )
         log_structured(
             logger,
@@ -132,6 +175,10 @@ def emit_canonical_running_workout(record_id: str) -> dict[str, str | bool]:
         if response is None:
             return {"emitted": False, "reason": "canonical_workout_incomplete"}
         running_analysis = performance_record_service.analyze_running_workout(db, canonical.id)
+        coaching_context = _coaching_context(db, response)
+        coaching_context["has_personal_record"] = any(
+            item.change_type in {"created", "restored", "improved"} for item in running_analysis.records_changed
+        )
 
         primary_provider = response.provenance.get("name", "canonical")
         primary_source = next((source for source in response.sources if source.provider == primary_provider), None)
@@ -160,6 +207,7 @@ def emit_canonical_running_workout(record_id: str) -> dict[str, str | bool]:
             sources=[source.model_dump(mode="json") for source in response.sources],
             provenance=response.provenance,
             performance_records=[item.model_dump(mode="json") for item in running_analysis.records_changed],
+            coaching_context=coaching_context,
         )
         log_structured(
             logger,

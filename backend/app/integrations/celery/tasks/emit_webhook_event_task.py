@@ -8,14 +8,41 @@ from __future__ import annotations
 
 from logging import getLogger
 from typing import Any
+from uuid import UUID
 
 from celery import shared_task
 
 from app.database import SessionLocal
+from app.schemas.delivery_receipt import DeliveryReceiptCreate, DeliveryStage
+from app.services.delivery_receipt_service import delivery_receipt_service
 from app.services.developer_service import developer_service
 from app.services.outgoing_webhooks import svix as svix_service
 
 logger = getLogger(__name__)
+
+
+def _record_checkpoint(payload: dict[str, Any], event_type: str, stage: DeliveryStage) -> None:
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return
+    user_id = data.get("user_id")
+    event_id = data.get("canonical_id") or data.get("id")
+    if not isinstance(user_id, str) or not isinstance(event_id, str):
+        return
+    try:
+        with SessionLocal() as db:
+            delivery_receipt_service.record(
+                db,
+                UUID(user_id),
+                DeliveryReceiptCreate(
+                    event_id=event_id,
+                    event_type=event_type,
+                    stage=stage,
+                    source="open-wearables",
+                ),
+            )
+    except Exception:
+        logger.warning("Could not record %s checkpoint for %s", stage, event_type, exc_info=True)
 
 
 @shared_task(
@@ -42,6 +69,8 @@ def emit_webhook_event(
     if not svix_service.is_enabled():
         logger.debug("Svix is not configured — skipping webhook dispatch for event %s", event_type)
         return {"event_type": event_type, "sent": 0, "errors": []}
+
+    _record_checkpoint(payload, event_type, "open_wearables_event_ready")
 
     with SessionLocal() as db:
         page_size = 100
@@ -81,5 +110,8 @@ def emit_webhook_event(
             event_type,
         )
         raise self.retry(exc=exc)
+
+    if sent:
+        _record_checkpoint(payload, event_type, "webhook_dispatched")
 
     return {"event_type": event_type, "sent": sent, "errors": errors}
