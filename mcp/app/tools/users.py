@@ -1,6 +1,7 @@
 """MCP tools for user management."""
 
 import logging
+from datetime import datetime, timezone
 
 from fastmcp import FastMCP
 
@@ -11,6 +12,15 @@ logger = logging.getLogger(__name__)
 
 # Create router for user-related tools
 users_router = FastMCP(name="Users Tools")
+
+
+def _parse_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 @users_router.tool
@@ -76,3 +86,49 @@ async def get_users(search: str | None = None, limit: int = 10) -> dict:
     except Exception as e:
         logger.exception(f"Unexpected error in get_users: {e}")
         return {"error": f"Failed to fetch users: {e}", "users": [], "total": 0}
+
+
+@users_router.tool
+async def get_data_freshness(user_id: str, stale_after_hours: int = 6) -> dict:
+    """Check source recency and whether a device-backed bridge is stale.
+
+    Call this before making claims that depend on current-day data. In particular,
+    Apple Health is bridged by an iPhone and can become stale when iOS has not
+    woken the Bionic app. Cloud provider timestamps are returned for context but
+    inactivity alone does not mark an event-driven cloud connection stale. A stale
+    device bridge means the available health records may be incomplete; state that
+    limitation instead of treating missing data as zero.
+
+    Args:
+        user_id: Open Wearables user UUID.
+        stale_after_hours: Age at which an active source is considered stale (default 6).
+    """
+    try:
+        connections = await client.get_connections(user_id)
+        now = datetime.now(timezone.utc)
+        sources: list[dict] = []
+        for connection in connections:
+            if connection.get("status") != "active":
+                continue
+            last_synced_at = _parse_timestamp(connection.get("last_synced_at"))
+            age_hours = None if last_synced_at is None else (now - last_synced_at).total_seconds() / 3600
+            is_device_bridge = connection.get("provider") in {"apple", "samsung", "google"}
+            is_stale = is_device_bridge and (age_hours is None or age_hours > stale_after_hours)
+            sources.append(
+                {
+                    "provider": connection.get("provider"),
+                    "last_synced_at": connection.get("last_synced_at"),
+                    "age_hours": None if age_hours is None else round(max(age_hours, 0), 2),
+                    "is_stale": is_stale,
+                    "delivery": "device_bridge" if is_device_bridge else "provider_connection",
+                }
+            )
+        return {
+            "checked_at": now.isoformat(),
+            "stale_after_hours": stale_after_hours,
+            "is_stale": any(source["is_stale"] for source in sources),
+            "sources": sources,
+        }
+    except OpenWearablesError as exc:
+        logger.error("API error in get_data_freshness: %s", exc)
+        return {"error": str(exc), "sources": []}

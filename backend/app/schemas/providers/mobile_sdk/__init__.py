@@ -1,5 +1,8 @@
 from .sdk_log_events import (
+    BackgroundDeliveryRegistrationEvent,
+    BridgeHeartbeatEvent,
     DeviceStateEvent,
+    HealthKitObserverEvent,
     HistoricalDataSyncStartEvent,
     HistoricalDataTypeSyncEndEvent,
     SDKLogRequest,
@@ -21,7 +24,10 @@ from .sync_request import (
 __all__ = [
     # SDKLogEvents
     "SDKLogRequest",
+    "BackgroundDeliveryRegistrationEvent",
+    "BridgeHeartbeatEvent",
     "DeviceStateEvent",
+    "HealthKitObserverEvent",
     "HistoricalDataSyncStartEvent",
     "HistoricalDataTypeSyncEndEvent",
     # SleepState

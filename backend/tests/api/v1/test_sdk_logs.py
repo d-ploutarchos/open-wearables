@@ -50,6 +50,30 @@ DEVICE_STATE_EVENT = {
     "totalRamBytes": 6442450944,
 }
 
+BACKGROUND_REGISTRATION_EVENT = {
+    "eventType": "background_delivery_registration",
+    "timestamp": "2026-09-02T08:00:00Z",
+    "dataType": "HKQuantityTypeIdentifierDietaryEnergyConsumed",
+    "success": True,
+}
+
+OBSERVER_EVENT = {
+    "eventType": "healthkit_observer_triggered",
+    "timestamp": "2026-09-02T08:15:00Z",
+    "dataType": "HKQuantityTypeIdentifierDietaryEnergyConsumed",
+}
+
+BRIDGE_HEARTBEAT_EVENT = {
+    "eventType": "bridge_heartbeat",
+    "timestamp": "2026-09-02T08:15:01Z",
+    "trigger": "healthkit_observer",
+    "lastSyncRequestedAt": "2026-09-02T08:15:00Z",
+    "lastHealthKitEventAt": "2026-09-02T08:15:00Z",
+    "backgroundDeliveryStatus": {
+        "HKQuantityTypeIdentifierDietaryEnergyConsumed": True,
+    },
+}
+
 
 def _url(user_id: str = USER_ID) -> str:
     return ENDPOINT.format(user_id=user_id)
@@ -105,6 +129,19 @@ class TestSDKLogsHappyPath:
             json=_payload(DEVICE_STATE_EVENT),
         )
         assert response.status_code == 202
+
+    @patch("app.api.routes.v1.sdk_logs.store_raw_payload")
+    def test_bridge_reliability_events_are_accepted(
+        self, mock_store: MagicMock, client: TestClient, db: Session
+    ) -> None:
+        api_key = ApiKeyFactory()
+        response = client.post(
+            _url(),
+            headers={"X-Open-Wearables-API-Key": api_key.id},
+            json=_payload(BACKGROUND_REGISTRATION_EVENT, OBSERVER_EVENT, BRIDGE_HEARTBEAT_EVENT),
+        )
+        assert response.status_code == 202
+        mock_store.assert_called_once()
 
     @patch("app.api.routes.v1.sdk_logs.store_raw_payload")
     def test_provider_omitted_defaults_to_unknown(self, mock_store: MagicMock, client: TestClient, db: Session) -> None:

@@ -5,6 +5,7 @@ MCP (Model Context Protocol) server for Open Wearables, enabling AI assistants l
 ## Features
 
 - **get_users**: Discover users accessible via your API key
+- **get_data_freshness**: Detect stale provider data, including a dormant Apple Health device bridge
 - **get_activity_summary**: Get daily activity data (steps, calories, heart rate, intensity minutes)
 - **get_sleep_summary**: Get sleep data for a user within a date range
 - **get_workout_events**: Get workout/exercise sessions for a user within a date range

@@ -86,6 +86,11 @@ class OpenWearablesClient:
         """
         return await self._request("GET", f"/api/v1/users/{user_id}")
 
+    async def get_connections(self, user_id: str) -> list[dict[str, Any]]:
+        """Get provider connections, including their last successful sync time."""
+        response = await self._request("GET", f"/api/v1/users/{user_id}/connections")
+        return cast(list[dict[str, Any]], response)
+
     async def get_sleep_summaries(
         self,
         user_id: str,

@@ -6,7 +6,10 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.constants.series_types.sdk import get_series_type_from_metric_type
 from app.schemas.providers.mobile_sdk import (
+    BackgroundDeliveryRegistrationEvent,
+    BridgeHeartbeatEvent,
     DeviceStateEvent,
+    HealthKitObserverEvent,
     HistoricalDataSyncStartEvent,
     HistoricalDataTypeSyncEndEvent,
     SDKLogRequest,
@@ -60,6 +63,25 @@ def _event_fields(body: SDKLogRequest) -> dict[str, Any]:
                     "native_data_type": event.dataType,
                     "success": event.success,
                     "record_count": event.recordCount,
+                }
+            case BackgroundDeliveryRegistrationEvent():
+                fields |= {
+                    "data_type": event.dataType,
+                    "success": event.success,
+                    "registration_error": event.error,
+                }
+            case HealthKitObserverEvent():
+                fields |= {"data_type": event.dataType}
+            case BridgeHeartbeatEvent():
+                fields |= {
+                    "trigger": event.trigger,
+                    "last_sync_requested_at": event.lastSyncRequestedAt,
+                    "last_sync_completed_at": event.lastSyncCompletedAt,
+                    "last_healthkit_event_at": event.lastHealthKitEventAt,
+                    "bridge_error": event.lastError,
+                    "background_delivery_failures": sum(
+                        1 for success in event.backgroundDeliveryStatus.values() if not success
+                    ),
                 }
 
     return {key: value for key, value in fields.items() if value is not None}

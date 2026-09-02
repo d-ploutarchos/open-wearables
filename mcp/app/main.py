@@ -35,6 +35,7 @@ mcp = FastMCP(
 
     Available tools:
     - get_users: Discover users accessible via your API key
+    - get_data_freshness: Check whether Apple Health and other connected sources are current
     - get_activity_summary: Get daily activity data (steps, calories, heart rate, intensity minutes)
     - get_sleep_summary: Get sleep data for a user over a specified time period
     - get_workout_events: Get workout/exercise data for a user over a specified time period
@@ -62,7 +63,8 @@ mcp = FastMCP(
        - If user specifies a time period: calculate the appropriate start_date and end_date
        - If NO time period specified: default to the last 2 weeks (start_date = 14 days ago, end_date = today)
     4. Use the user's ID to query their health data with the appropriate tool
-    5. Present the data in a human-friendly format, highlighting key insights
+    5. For claims about today, the latest meal, sleep, or a just-finished workout, call get_data_freshness
+    6. Present the data in a human-friendly format, highlighting key insights
 
     Performance-record routing:
     - For PR, personal-best, 1RM, or standard-distance questions, call get_personal_records first.

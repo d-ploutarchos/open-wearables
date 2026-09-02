@@ -50,8 +50,44 @@ class DeviceStateEvent(BaseModel):
     totalRamBytes: int | None = None
 
 
+class BackgroundDeliveryRegistrationEvent(BaseModel):
+    """Result of registering one HealthKit type for background delivery."""
+
+    eventType: Literal["background_delivery_registration"]
+    timestamp: datetime
+    dataType: str
+    success: bool
+    error: str | None = None
+
+
+class HealthKitObserverEvent(BaseModel):
+    """A HealthKit observer wake received by the mobile bridge."""
+
+    eventType: Literal["healthkit_observer_triggered"]
+    timestamp: datetime
+    dataType: str
+
+
+class BridgeHeartbeatEvent(BaseModel):
+    """Durable bridge lifecycle and sync-attempt telemetry."""
+
+    eventType: Literal["bridge_heartbeat"]
+    timestamp: datetime
+    trigger: str
+    lastSyncRequestedAt: datetime | None = None
+    lastSyncCompletedAt: datetime | None = None
+    lastHealthKitEventAt: datetime | None = None
+    lastError: str | None = None
+    backgroundDeliveryStatus: dict[str, bool] = Field(default_factory=dict)
+
+
 SDKLogEvent = Annotated[
-    HistoricalDataSyncStartEvent | HistoricalDataTypeSyncEndEvent | DeviceStateEvent,
+    HistoricalDataSyncStartEvent
+    | HistoricalDataTypeSyncEndEvent
+    | DeviceStateEvent
+    | BackgroundDeliveryRegistrationEvent
+    | HealthKitObserverEvent
+    | BridgeHeartbeatEvent,
     Field(discriminator="eventType"),
 ]
 

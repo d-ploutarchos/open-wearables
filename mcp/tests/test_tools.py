@@ -15,7 +15,7 @@ from app.tools.activity import get_activity_summary
 from app.tools.menstrual_cycles import get_menstrual_cycles
 from app.tools.sleep import get_sleep_summary
 from app.tools.timeseries import get_timeseries
-from app.tools.users import get_users
+from app.tools.users import get_data_freshness, get_users
 from app.tools.workouts import get_workout_events
 
 USER_ID = "00000000-0000-0000-0000-000000000000"
@@ -40,6 +40,45 @@ async def test_get_users_returns_empty_envelope_on_auth_error(httpx_mock: HTTPXM
     assert result["users"] == []
     assert result["total"] == 0
     assert "error" in result
+
+
+async def test_get_data_freshness_marks_old_apple_bridge_stale(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=f"https://api.test.com/api/v1/users/{USER_ID}/connections",
+        json=[
+            {
+                "provider": "apple",
+                "status": "active",
+                "last_synced_at": "2026-01-01T00:00:00Z",
+            },
+            {
+                "provider": "hevy",
+                "status": "active",
+                "last_synced_at": "2026-01-01T00:00:00Z",
+            },
+        ],
+    )
+
+    result = await get_data_freshness(USER_ID)
+
+    assert result["is_stale"] is True
+    assert result["sources"] == [
+        {
+            "provider": "apple",
+            "last_synced_at": "2026-01-01T00:00:00Z",
+            "age_hours": result["sources"][0]["age_hours"],
+            "is_stale": True,
+            "delivery": "device_bridge",
+        },
+        {
+            "provider": "hevy",
+            "last_synced_at": "2026-01-01T00:00:00Z",
+            "age_hours": result["sources"][1]["age_hours"],
+            "is_stale": False,
+            "delivery": "provider_connection",
+        },
+    ]
 
 
 @pytest.mark.parametrize(
