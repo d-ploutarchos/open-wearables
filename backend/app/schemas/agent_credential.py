@@ -51,6 +51,7 @@ class AgentWebhookConfigure(BaseModel):
             "workout.created",
             "sleep.created",
             "nutrition.created",
+            "body_composition.created",
             "coaching.weekly_review.created",
             "coaching.load_alert.created",
         ],
